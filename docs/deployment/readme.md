@@ -1,6 +1,43 @@
 # DailyHotApi 部署文档
 
-> 版本: v1.0 | 更新时间: 2026-03-01
+> 版本: v1.1 | 更新时间: 2026-03-01
+
+---
+
+## ⚠️ 重要警告：禁止在 ECS 上执行 tsc 编译
+
+> **2026-03-01 事故记录**：首次部署时在 ECS（1.9GB 内存）上执行 `pnpm run build`（tsc 编译），
+> TypeScript 编译器内存占用飙升，耗尽系统内存，导致 OOM Killer 杀死 sshd 进程，
+> ECS 完全失联，只能通过控制台强制重启恢复。
+
+### 根因分析
+
+| 因素 | 说明 |
+|------|------|
+| **ECS 内存不足** | 总共 1.9GB，已有 5 个 PM2 进程占用约 400MB，可用不到 800MB |
+| **tsc 内存开销大** | TypeScript 编译 60+ 路由文件，内存峰值远超可用空间 |
+| **无 swap 分区** | ECS 未配置 swap，内存耗尽后 OOM Killer 直接杀进程 |
+| **sshd 被误杀** | OOM Killer 选择杀 sshd，导致远程连接中断，无法恢复 |
+
+### 正确做法
+
+```bash
+# ✅ 本地构建，rsync 上传编译产物
+pnpm run build                    # 本地执行
+rsync -avz --delete dist/ root@115.190.207.149:/var/www/dailyhot-api/dist/
+ssh root@115.190.207.149 "pm2 restart daily-hot"
+
+# ❌ 绝对禁止在 ECS 上执行以下命令
+# pnpm run build
+# tsc
+# npx tsc
+```
+
+### 通用原则
+
+- **所有 TypeScript 项目**：本地/CI 编译 → rsync 上传 `dist/` → ECS 只运行 JS
+- **ECS 只做运行时**：运行 Node.js 产物、Nginx、Redis、PM2，不做编译
+- **内存敏感操作**（npm install 大量依赖、构建、压缩等）一律在本地完成
 
 ---
 
@@ -70,19 +107,28 @@ sudo apt-get install -y certbot python3-certbot-nginx
 
 ## 3. 首次部署
 
-### 3.1 拉取代码
+### 3.1 本地构建 & 上传到 ECS
+
+> **禁止在 ECS 上执行 `pnpm run build`**，详见文档顶部警告。
 
 ```bash
-cd /var/www
-git clone <仓库地址> dailyhot-api
-cd dailyhot-api
-```
+# === 本地操作 ===
+cd CrawlerData/DailyHotApi
 
-### 3.2 安装依赖 & 构建
-
-```bash
+# 安装依赖 & 构建
 pnpm install
 pnpm run build
+
+# 上传整个项目到 ECS（首次部署）
+rsync -avz --exclude node_modules --exclude .git --exclude logs \
+  ./ root@115.190.207.149:/var/www/dailyhot-api/
+
+# === ECS 操作 ===
+ssh root@115.190.207.149
+cd /var/www/dailyhot-api
+
+# ECS 上只安装生产依赖（不编译）
+pnpm install --prod
 ```
 
 ### 3.3 配置环境变量
@@ -198,17 +244,32 @@ curl https://dailyhot.runfast.xyz/all
 
 ## 4. 更新部署
 
+> **所有构建操作在本地完成，ECS 只接收编译产物。**
+
 ```bash
-cd /var/www/dailyhot-api
+# === 本地操作 ===
+cd CrawlerData/DailyHotApi
 
-# 方式一：使用 deploy.sh
-bash deploy.sh
-
-# 方式二：手动
+# 拉取最新代码 & 构建
 git pull
 pnpm install
 pnpm run build
-pm2 restart daily-hot
+
+# 方式一：只上传编译产物（推荐，速度快）
+rsync -avz --delete dist/ root@115.190.207.149:/var/www/dailyhot-api/dist/
+ssh root@115.190.207.149 "pm2 restart daily-hot"
+
+# 方式二：上传完整项目（依赖有变更时使用）
+rsync -avz --exclude node_modules --exclude .git --exclude logs \
+  ./ root@115.190.207.149:/var/www/dailyhot-api/
+ssh root@115.190.207.149 "cd /var/www/dailyhot-api && pnpm install --prod && pm2 restart daily-hot"
+```
+
+```bash
+# ❌ 禁止在 ECS 上执行（会导致内存耗尽、服务器失联）
+# pnpm run build
+# tsc
+# npx tsc
 ```
 
 ---
@@ -342,6 +403,25 @@ Redis connection failed
 - PM2 进程可能未运行：`pm2 list`
 - 端口是否正确：`curl http://localhost:15000/all`
 - 查看 PM2 日志：`pm2 logs daily-hot`
+
+### ECS 内存耗尽 / SSH 失联
+
+```
+OOM Killer → sshd 被杀 → SSH 无法连接
+```
+
+**原因**：在 ECS 上执行了内存密集操作（如 tsc 编译）
+
+**恢复方法**：
+1. 登录云服务商控制台
+2. 强制停止 ECS 实例（非重启，因为重启可能因内存不足卡住）
+3. 等待实例完全停止后重新启动
+4. SSH 重新连接
+
+**预防**：
+- 永远不要在 ECS 上执行 `tsc` / `pnpm run build`
+- 本地构建 → rsync 上传 `dist/`
+- 参见文档顶部「禁止在 ECS 上执行 tsc 编译」章节
 
 ### SSL 证书过期
 
