@@ -2,21 +2,75 @@ import type { Get, Post } from "../types.js";
 import { config } from "../config.js";
 import { getCache, setCache, delCache } from "./cache.js";
 import logger from "./logger.js";
-import axios from "axios";
+import axios, { type AxiosProxyConfig } from "axios";
 
-// 基础配置
+// 需要走代理的国外站点域名（其余国内站点禁用代理）
+const PROXY_DOMAINS = [
+  "github.com",
+  "hellogithub.com",
+  "abroad.hellogithub.com",
+  "news.ycombinator.com",
+  "www.producthunt.com",
+  "www.nytimes.com",
+  "rss.nytimes.com",
+  "cn.nytimes.com",
+];
+
+/**
+ * 判断 URL 是否需要走代理
+ * 国外站点使用系统代理，国内站点禁用代理
+ */
+const needsProxy = (url: string): boolean => {
+  try {
+    const hostname = new URL(url).hostname;
+    return PROXY_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`));
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * 从环境变量解析代理配置
+ * 支持 http_proxy / https_proxy / HTTP_PROXY / HTTPS_PROXY
+ */
+const getEnvProxy = (protocol: string): AxiosProxyConfig | false => {
+  const envKey = protocol === "https:" ? "https_proxy" : "http_proxy";
+  const proxyUrl = process.env[envKey] || process.env[envKey.toUpperCase()];
+  if (!proxyUrl) return false;
+  try {
+    const parsed = new URL(proxyUrl);
+    return {
+      host: parsed.hostname,
+      port: parseInt(parsed.port) || (parsed.protocol === "https:" ? 443 : 80),
+      ...(parsed.username && { auth: { username: parsed.username, password: parsed.password } }),
+      protocol: parsed.protocol.replace(":", ""),
+    };
+  } catch {
+    return false;
+  }
+};
+
+// 基础配置（默认禁用代理）
 const request = axios.create({
-  // 请求超时设置
   timeout: config.REQUEST_TIMEOUT,
   withCredentials: true,
+  proxy: false,
 });
 
 // 请求拦截
 request.interceptors.request.use(
-  (request) => {
-    if (!request.params) request.params = {};
-    // 发送请求
-    return request;
+  (req) => {
+    if (!req.params) req.params = {};
+    // 国外站点：从环境变量读取代理配置
+    if (req.url && needsProxy(req.url)) {
+      const protocol = new URL(req.url).protocol;
+      const proxyConfig = getEnvProxy(protocol);
+      if (proxyConfig) {
+        req.proxy = proxyConfig;
+        logger.info(`🌐 [PROXY] ${req.url} → ${proxyConfig.host}:${proxyConfig.port}`);
+      }
+    }
+    return req;
   },
   (error) => {
     logger.error("❌ [ERROR] request failed");
