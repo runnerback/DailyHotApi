@@ -133,36 +133,21 @@ pnpm install --prod
 
 ### 3.3 配置环境变量
 
+项目维护两份环境配置文件：
+
+| 文件 | 用途 | `API_KEY_ENABLE` | `KDL_ENABLE` |
+|------|------|------------------|--------------|
+| `.env` | 本地开发 | `false` | `false` |
+| `.env.production` | ECS 生产 | `true` | `true` |
+
+首次部署时，将 `.env.production` 重命名为 `.env`：
+
 ```bash
-cp .env.example .env
-vim .env
+cd /var/www/dailyhot-api
+mv .env.production .env
 ```
 
-修改以下配置：
-
-```env
-PORT=15000
-
-ALLOWED_DOMAIN="*"
-ALLOWED_HOST=""
-
-REDIS_HOST="127.0.0.1"
-REDIS_PORT=6379
-REDIS_PASSWORD=""
-REDIS_DB=0
-
-CACHE_TTL=3600
-REQUEST_TIMEOUT=6000
-USE_LOG_FILE=true
-RSS_MODE=false
-DISALLOW_ROBOT=true
-
-# API Key 鉴权（ECS 生产环境必须开启）
-API_KEY_ENABLE=true
-API_KEY=your-secret-key-here
-```
-
-> **注意**：本地开发环境设置 `API_KEY_ENABLE=false` 即可关闭鉴权。
+> 后续更新部署（方式二）会自动完成重命名，无需手动操作。
 
 ### 3.4 更新 PM2 配置
 
@@ -270,9 +255,10 @@ rsync -avz --delete dist/ root@115.190.207.149:/var/www/dailyhot-api/dist/
 ssh root@115.190.207.149 "pm2 restart daily-hot"
 
 # 方式二：上传完整项目（依赖有变更时使用）
-rsync -avz --exclude node_modules --exclude .git --exclude logs \
+# 注意：排除 .env 避免覆盖生产配置，.env.production 上传后会被重命名为 .env
+rsync -avz --exclude node_modules --exclude .git --exclude logs --exclude .env \
   ./ root@115.190.207.149:/var/www/dailyhot-api/
-ssh root@115.190.207.149 "cd /var/www/dailyhot-api && pnpm install --prod && pm2 restart daily-hot"
+ssh root@115.190.207.149 "cd /var/www/dailyhot-api && mv .env.production .env && pnpm install --prod && pm2 restart daily-hot"
 ```
 
 ```bash
