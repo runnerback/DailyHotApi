@@ -6,6 +6,7 @@ import { compress } from "hono/compress";
 import { prettyJSON } from "hono/pretty-json";
 import { trimTrailingSlash } from "hono/trailing-slash";
 import logger from "./utils/logger.js";
+import apiKeyAuth from "./utils/auth.js";
 import registry from "./registry.js";
 import robotstxt from "./robots.txt.js";
 import NotFound from "./views/NotFound.js";
@@ -34,10 +35,13 @@ app.use(
       return isSame ? origin : config.ALLOWED_DOMAIN;
     },
     allowMethods: ["POST", "GET", "OPTIONS"],
-    allowHeaders: ["X-Custom-Header", "Upgrade-Insecure-Requests"],
+    allowHeaders: ["X-Custom-Header", "Upgrade-Insecure-Requests", "X-API-Key"],
     credentials: true,
   }),
 );
+
+// API Key 鉴权
+app.use("*", apiKeyAuth);
 
 // 静态资源
 app.use(
