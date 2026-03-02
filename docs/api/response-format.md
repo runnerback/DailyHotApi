@@ -1,5 +1,7 @@
 # 响应格式
 
+> 版本: v1.1 | 更新时间: 2026-03-02
+
 ## JSON 响应（默认）
 
 ### 结构
@@ -134,13 +136,4 @@ Content-Type: application/xml; charset=utf-8
 | 405 | 请求方法不允许（仅支持 GET） |
 | 500 | 服务端错误（平台接口异常等） |
 
-### 401 未授权示例
-
-```json
-{
-  "code": 401,
-  "message": "Unauthorized"
-}
-```
-
-生产环境需在请求 Header 中携带 `X-API-Key`，详见 [使用指南](./README.md)。
+鉴权方式见 [使用指南](./README.md)。

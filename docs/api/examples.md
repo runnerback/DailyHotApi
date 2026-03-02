@@ -1,7 +1,8 @@
 # 使用示例
 
-> 以下示例均以 `http://localhost:15000` 为基础地址。
-> 生产环境需携带 `X-API-Key` Header 鉴权，本地开发可在 `.env` 中设置 `API_KEY_ENABLE=false` 关闭。
+> 版本: v1.1 | 更新时间: 2026-03-02
+>
+> 以下示例均以 `http://localhost:15000` 为基础地址。鉴权方式见 [使用指南](./README.md)。
 
 ## cURL
 
