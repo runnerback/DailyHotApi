@@ -1,24 +1,25 @@
 # 使用示例
 
 > 以下示例均以 `http://localhost:15000` 为基础地址。
+> 生产环境需携带 `X-API-Key` Header 鉴权，本地开发可在 `.env` 中设置 `API_KEY_ENABLE=false` 关闭。
 
 ## cURL
 
 ```bash
 # 微博热搜
-curl http://localhost:15000/weibo
+curl -H "X-API-Key: your-key" http://localhost:15000/weibo
 
 # B站游戏区 Top 10
-curl "http://localhost:15000/bilibili?type=4&limit=10"
+curl -H "X-API-Key: your-key" "http://localhost:15000/bilibili?type=4&limit=10"
 
 # GitHub 周趋势 RSS
-curl "http://localhost:15000/github?type=weekly&rss=true"
+curl -H "X-API-Key: your-key" "http://localhost:15000/github?type=weekly&rss=true"
 
 # 强制刷新百度热搜
-curl "http://localhost:15000/baidu?cache=false"
+curl -H "X-API-Key: your-key" "http://localhost:15000/baidu?cache=false"
 
 # 查看所有可用平台
-curl http://localhost:15000/all
+curl -H "X-API-Key: your-key" http://localhost:15000/all
 ```
 
 ## JavaScript / TypeScript
@@ -26,8 +27,11 @@ curl http://localhost:15000/all
 ### Fetch API
 
 ```typescript
+const API_KEY = 'your-key';
+const headers = { 'X-API-Key': API_KEY };
+
 // 获取微博热搜
-const res = await fetch('http://localhost:15000/weibo');
+const res = await fetch('http://localhost:15000/weibo', { headers });
 const data = await res.json();
 
 console.log(`共 ${data.total} 条热搜`);
@@ -42,9 +46,11 @@ data.data.forEach((item, i) => {
 import axios from 'axios';
 
 const BASE_URL = 'http://localhost:15000';
+const API_KEY = 'your-key';
 
 // 获取B站排行
 const { data } = await axios.get(`${BASE_URL}/bilibili`, {
+  headers: { 'X-API-Key': API_KEY },
   params: { type: '0', limit: 20 }
 });
 
@@ -61,6 +67,7 @@ data.data.forEach(item => {
 
 ```typescript
 const API_BASE = 'http://localhost:15000';
+const API_KEY = 'your-key';
 
 interface HotItem {
   id: string | number;
@@ -95,7 +102,9 @@ async function getHotList(
   if (options?.cache === false) params.set('cache', 'false');
 
   const url = `${API_BASE}/${platform}?${params}`;
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: { 'X-API-Key': API_KEY },
+  });
   return res.json();
 }
 
@@ -111,9 +120,11 @@ const github = await getHotList('github', { type: 'weekly' });
 import requests
 
 BASE_URL = "http://localhost:15000"
+API_KEY = "your-key"
+HEADERS = {"X-API-Key": API_KEY}
 
 # 获取微博热搜
-res = requests.get(f"{BASE_URL}/weibo")
+res = requests.get(f"{BASE_URL}/weibo", headers=HEADERS)
 data = res.json()
 
 print(f"共 {data['total']} 条热搜 (缓存: {data['fromCache']})")
@@ -123,7 +134,7 @@ for i, item in enumerate(data["data"][:10], 1):
 
 ```python
 # 带参数请求
-res = requests.get(f"{BASE_URL}/bilibili", params={
+res = requests.get(f"{BASE_URL}/bilibili", headers=HEADERS, params={
     "type": "4",      # 游戏区
     "limit": "10",    # 前 10 条
     "cache": "false",  # 不使用缓存
@@ -137,11 +148,14 @@ for item in data["data"]:
 ## 批量获取多平台
 
 ```typescript
+const API_KEY = 'your-key';
+const headers = { 'X-API-Key': API_KEY };
+
 // 并发获取多个平台热榜
 const platforms = ['weibo', 'zhihu', 'bilibili', 'douyin', 'baidu'];
 
 const results = await Promise.all(
-  platforms.map(p => fetch(`http://localhost:15000/${p}`).then(r => r.json()))
+  platforms.map(p => fetch(`http://localhost:15000/${p}`, { headers }).then(r => r.json()))
 );
 
 results.forEach(data => {
@@ -154,25 +168,27 @@ results.forEach(data => {
 
 ## RSS 订阅
 
-所有接口都支持 RSS 输出，适用于 RSS 阅读器：
+所有接口都支持 RSS 输出，适用于 RSS 阅读器。
+
+> 注意：RSS 订阅 URL 同样需要鉴权，部分 RSS 阅读器不支持自定义 Header。如需 RSS 订阅，可考虑通过中间服务转发。
 
 ```
 # 微博热搜 RSS
-http://localhost:15000/weibo?rss=true
+curl -H "X-API-Key: your-key" "http://localhost:15000/weibo?rss=true"
 
 # GitHub 日趋势 RSS
-http://localhost:15000/github?rss=true
+curl -H "X-API-Key: your-key" "http://localhost:15000/github?rss=true"
 
 # 知乎热榜 RSS
-http://localhost:15000/zhihu?rss=true
+curl -H "X-API-Key: your-key" "http://localhost:15000/zhihu?rss=true"
 ```
-
-在 RSS 阅读器（如 Inoreader、Feedly、NetNewsWire）中直接添加以上 URL 即可订阅。
 
 ## 获取所有可用平台
 
 ```typescript
-const res = await fetch('http://localhost:15000/all');
+const res = await fetch('http://localhost:15000/all', {
+  headers: { 'X-API-Key': 'your-key' },
+});
 const { routes, count } = await res.json();
 
 console.log(`共 ${count} 个平台:`);

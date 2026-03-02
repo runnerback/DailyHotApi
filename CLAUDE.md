@@ -54,6 +54,7 @@ src/
 │   ├── getTime.ts        # 时间格式化
 │   ├── getNum.ts         # 数字解析
 │   ├── parseRSS.ts       # RSS 解析
+│   ├── auth.ts           # API Key 鉴权中间件
 │   └── getToken/         # 平台认证（Bilibili WBI、Weread、Coolapk）
 └── views/                # JSX 页面（首页、错误页、404）
 ```
@@ -161,6 +162,21 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 | `REQUEST_TIMEOUT` | 6000 | 请求超时(ms) |
 | `USE_LOG_FILE` | true | 是否写日志文件 |
 | `RSS_MODE` | false | 默认 RSS 输出 |
+| `API_KEY_ENABLE` | false | 是否启用 API Key 鉴权 |
+| `API_KEY` | 空 | API 密钥（`API_KEY_ENABLE=true` 时必填） |
+
+## API 鉴权
+
+生产环境通过 `X-API-Key` Header 鉴权，中间件位于 `src/utils/auth.ts`。
+
+- **ECS 生产环境**：`.env` 设置 `API_KEY_ENABLE=true` + `API_KEY=密钥`
+- **本地开发环境**：`.env` 设置 `API_KEY_ENABLE=false`，无需携带 Key
+- **免鉴权路径**：`/`、`/robots.txt`、`/favicon.ico`、`/favicon.png`
+
+```bash
+# 生产环境请求示例
+curl -H "X-API-Key: your-key" https://dailyhot.runfast.xyz/bilibili
+```
 
 ## 重要约定
 

@@ -2,6 +2,18 @@
 
 所有平台接口都支持以下查询参数，可自由组合。
 
+> 生产环境需携带 `X-API-Key` Header 鉴权，详见 [使用指南](./README.md)。
+
+## 鉴权
+
+| Header | 说明 |
+|--------|------|
+| `X-API-Key` | API 密钥，生产环境必传，本地开发可通过 `API_KEY_ENABLE=false` 关闭 |
+
+```bash
+curl -H "X-API-Key: your-key" http://localhost:15000/weibo
+```
+
 ## 参数列表
 
 ### `cache` — 缓存控制

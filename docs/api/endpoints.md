@@ -2,6 +2,7 @@
 
 > 基础地址: `http://localhost:15000`
 > 所有接口均为 `GET` 请求
+> 生产环境需携带 `X-API-Key` Header 鉴权
 > 通用参数见 [query-params.md](./query-params.md)
 
 ---

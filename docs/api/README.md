@@ -24,31 +24,42 @@ pnpm install
 pnpm run dev
 ```
 
-### 2. 调用接口
+### 2. 鉴权
+
+生产环境启用了 API Key 鉴权，所有 API 请求须携带 `X-API-Key` Header：
+
+```bash
+curl -H "X-API-Key: your-secret-key-here" http://localhost:15000/weibo
+```
+
+未携带或 Key 错误将返回 `401 Unauthorized`。本地开发可在 `.env` 中设置 `API_KEY_ENABLE=false` 关闭鉴权。
+
+### 3. 调用接口
 
 所有接口格式统一：
 
 ```
 GET http://localhost:15000/{平台名}
+Header: X-API-Key: your-secret-key-here
 ```
 
 示例：
 
 ```bash
 # 获取微博热搜
-curl http://localhost:15000/weibo
+curl -H "X-API-Key: your-key" http://localhost:15000/weibo
 
 # 获取哔哩哔哩全站排行
-curl http://localhost:15000/bilibili
+curl -H "X-API-Key: your-key" http://localhost:15000/bilibili
 
 # 获取 GitHub 每日趋势
-curl http://localhost:15000/github
+curl -H "X-API-Key: your-key" http://localhost:15000/github
 ```
 
-### 3. 查看所有可用平台
+### 4. 查看所有可用平台
 
 ```bash
-curl http://localhost:15000/all
+curl -H "X-API-Key: your-key" http://localhost:15000/all
 ```
 
 返回：
@@ -64,7 +75,7 @@ curl http://localhost:15000/all
 }
 ```
 
-### 4. 常用查询参数
+### 5. 常用查询参数
 
 | 参数 | 说明 | 示例 |
 |------|------|------|

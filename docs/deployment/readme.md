@@ -1,6 +1,6 @@
 # DailyHotApi 部署文档
 
-> 版本: v1.1 | 更新时间: 2026-03-01
+> 版本: v1.2 | 更新时间: 2026-03-02
 
 ---
 
@@ -156,7 +156,13 @@ REQUEST_TIMEOUT=6000
 USE_LOG_FILE=true
 RSS_MODE=false
 DISALLOW_ROBOT=true
+
+# API Key 鉴权（ECS 生产环境必须开启）
+API_KEY_ENABLE=true
+API_KEY=your-secret-key-here
 ```
+
+> **注意**：本地开发环境设置 `API_KEY_ENABLE=false` 即可关闭鉴权。
 
 ### 3.4 更新 PM2 配置
 
@@ -233,11 +239,15 @@ sudo nginx -s reload
 ### 3.8 验证
 
 ```bash
-# HTTPS 访问
-curl https://dailyhot.runfast.xyz/weibo | head -c 200
+# HTTPS 访问（需携带 API Key）
+curl -H "X-API-Key: your-secret-key-here" https://dailyhot.runfast.xyz/weibo | head -c 200
 
-# 查看所有平台
-curl https://dailyhot.runfast.xyz/all
+# 不带 Key 应返回 401
+curl https://dailyhot.runfast.xyz/weibo
+# {"code":401,"message":"Unauthorized"}
+
+# 查看所有平台（需携带 API Key）
+curl -H "X-API-Key: your-secret-key-here" https://dailyhot.runfast.xyz/all
 ```
 
 ---
@@ -325,8 +335,8 @@ sudo systemctl status certbot.timer
 ## 6. 健康检查
 
 ```bash
-# API 健康检查
-curl -s https://dailyhot.runfast.xyz/bilibili | python3 -c "
+# API 健康检查（需携带 API Key）
+curl -s -H "X-API-Key: your-secret-key-here" https://dailyhot.runfast.xyz/bilibili | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 print(f'Status: {d[\"code\"]}, Items: {d[\"total\"]}, Cache: {d[\"fromCache\"]}')
@@ -335,8 +345,8 @@ print(f'Status: {d[\"code\"]}, Items: {d[\"total\"]}, Cache: {d[\"fromCache\"]}'
 # PM2 进程状态
 pm2 show daily-hot
 
-# Nginx 状态
-curl -I https://dailyhot.runfast.xyz/weibo
+# Nginx 状态（需携带 API Key）
+curl -I -H "X-API-Key: your-secret-key-here" https://dailyhot.runfast.xyz/weibo
 
 # Redis 连接
 redis-cli ping

@@ -129,6 +129,18 @@ Content-Type: application/xml; charset=utf-8
 | code | 说明 |
 |------|------|
 | 200 | 成功 |
+| 401 | 未授权（API Key 缺失或错误） |
 | 404 | 路由不存在 |
 | 405 | 请求方法不允许（仅支持 GET） |
 | 500 | 服务端错误（平台接口异常等） |
+
+### 401 未授权示例
+
+```json
+{
+  "code": 401,
+  "message": "Unauthorized"
+}
+```
+
+生产环境需在请求 Header 中携带 `X-API-Key`，详见 [使用指南](./README.md)。
