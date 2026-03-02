@@ -3,6 +3,8 @@ import { config } from "../config.js";
 import { getCache, setCache, delCache } from "./cache.js";
 import logger from "./logger.js";
 import axios, { type AxiosProxyConfig } from "axios";
+import { HttpProxyAgent } from "http-proxy-agent";
+import { HttpsProxyAgent } from "https-proxy-agent";
 import { getKdlProxy, markProxyInvalid } from "./kuaidaili.js";
 
 // 需要走代理的国外站点域名（其余国内站点禁用代理）
@@ -71,18 +73,12 @@ request.interceptors.request.use(
         logger.info(`🌐 [PROXY] ${req.url} → ${proxyConfig.host}:${proxyConfig.port}`);
       }
     } else if (req.url && config.KDL_ENABLE) {
-      // 国内站点：使用快代理
+      // 国内站点：使用快代理（通过 agent 实现 HTTPS 隧道）
       const kdlProxy = await getKdlProxy();
       if (kdlProxy) {
-        req.proxy = {
-          host: kdlProxy.ip,
-          port: kdlProxy.port,
-          auth: {
-            username: config.KDL_USERNAME,
-            password: config.KDL_PASSWORD,
-          },
-          protocol: "http",
-        };
+        const proxyUrl = `http://${config.KDL_USERNAME}:${config.KDL_PASSWORD}@${kdlProxy.ip}:${kdlProxy.port}`;
+        req.httpAgent = new HttpProxyAgent(proxyUrl);
+        req.httpsAgent = new HttpsProxyAgent(proxyUrl);
         logger.info(`🔄 [KDL] ${req.url} → ${kdlProxy.ip}:${kdlProxy.port}`);
       }
     }
@@ -102,7 +98,7 @@ request.interceptors.response.use(
   (error) => {
     // 快代理请求失败时标记代理无效
     const reqUrl = error.config?.url;
-    if (reqUrl && config.KDL_ENABLE && !needsProxy(reqUrl) && error.config?.proxy) {
+    if (reqUrl && config.KDL_ENABLE && !needsProxy(reqUrl) && error.config?.httpsAgent) {
       logger.warn(`⚠️ [KDL] 请求失败，已标记代理无效`);
       markProxyInvalid();
     }
