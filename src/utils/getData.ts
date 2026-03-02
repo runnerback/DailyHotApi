@@ -3,6 +3,7 @@ import { config } from "../config.js";
 import { getCache, setCache, delCache } from "./cache.js";
 import logger from "./logger.js";
 import axios, { type AxiosProxyConfig } from "axios";
+import { getKdlProxy, markProxyInvalid } from "./kuaidaili.js";
 
 // 需要走代理的国外站点域名（其余国内站点禁用代理）
 const PROXY_DOMAINS = [
@@ -59,15 +60,30 @@ const request = axios.create({
 
 // 请求拦截
 request.interceptors.request.use(
-  (req) => {
+  async (req) => {
     if (!req.params) req.params = {};
-    // 国外站点：从环境变量读取代理配置
     if (req.url && needsProxy(req.url)) {
+      // 国外站点：从环境变量读取代理配置
       const protocol = new URL(req.url).protocol;
       const proxyConfig = getEnvProxy(protocol);
       if (proxyConfig) {
         req.proxy = proxyConfig;
         logger.info(`🌐 [PROXY] ${req.url} → ${proxyConfig.host}:${proxyConfig.port}`);
+      }
+    } else if (req.url && config.KDL_ENABLE) {
+      // 国内站点：使用快代理
+      const kdlProxy = await getKdlProxy();
+      if (kdlProxy) {
+        req.proxy = {
+          host: kdlProxy.ip,
+          port: kdlProxy.port,
+          auth: {
+            username: config.KDL_USERNAME,
+            password: config.KDL_PASSWORD,
+          },
+          protocol: "http",
+        };
+        logger.info(`🔄 [KDL] ${req.url} → ${kdlProxy.ip}:${kdlProxy.port}`);
       }
     }
     return req;
@@ -84,7 +100,12 @@ request.interceptors.response.use(
     return response;
   },
   (error) => {
-    // 继续传递错误
+    // 快代理请求失败时标记代理无效
+    const reqUrl = error.config?.url;
+    if (reqUrl && config.KDL_ENABLE && !needsProxy(reqUrl) && error.config?.proxy) {
+      logger.warn(`⚠️ [KDL] 请求失败，已标记代理无效`);
+      markProxyInvalid();
+    }
     return Promise.reject(error);
   },
 );

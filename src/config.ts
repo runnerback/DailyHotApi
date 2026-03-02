@@ -20,6 +20,11 @@ export type Config = {
   FILTER_WEIBO_ADVERTISEMENT: boolean;
   API_KEY_ENABLE: boolean;
   API_KEY: string;
+  KDL_ENABLE: boolean;
+  KDL_SECRET_ID: string;
+  KDL_SIGNATURE: string;
+  KDL_USERNAME: string;
+  KDL_PASSWORD: string;
 };
 
 // 验证并提取环境变量
@@ -61,4 +66,9 @@ export const config: Config = {
   FILTER_WEIBO_ADVERTISEMENT: getBooleanEnvVariable("FILTER_WEIBO_ADVERTISEMENT", false),
   API_KEY_ENABLE: getBooleanEnvVariable("API_KEY_ENABLE", false),
   API_KEY: getEnvVariable("API_KEY") || "",
+  KDL_ENABLE: getBooleanEnvVariable("KDL_ENABLE", false),
+  KDL_SECRET_ID: getEnvVariable("KDL_SECRET_ID") || "",
+  KDL_SIGNATURE: getEnvVariable("KDL_SIGNATURE") || "",
+  KDL_USERNAME: getEnvVariable("KDL_USERNAME") || "",
+  KDL_PASSWORD: getEnvVariable("KDL_PASSWORD") || "",
 };
