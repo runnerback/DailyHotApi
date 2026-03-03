@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+> 版本: v1.1 | 更新时间: 2026-03-03
+
 本文件为 Claude Code 在此代码库工作时提供指导。
 
 ## 项目概述
@@ -55,6 +57,7 @@ src/
 │   ├── getNum.ts         # 数字解析
 │   ├── parseRSS.ts       # RSS 解析
 │   ├── auth.ts           # API Key 鉴权中间件
+│   ├── kuaidaili.ts      # 快代理（KuaiDaiLi）代理管理
 │   └── getToken/         # 平台认证（Bilibili WBI、Weread、Coolapk）
 └── views/                # JSX 页面（首页、错误页、404）
 ```
@@ -106,6 +109,13 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 - User-Agent 轮换防封
 - 自动集成缓存层
 - 可配置超时（默认 6000ms）
+- 国外站点：环境变量 http_proxy/https_proxy
+- 国内站点：快代理（KDL_ENABLE=true 时）通过 https-proxy-agent 隧道
+
+**快代理** (`kuaidaili.ts`):
+- 私密代理 API 获取 IP（30 分钟有效期，5 分钟安全余量）
+- 内存缓存 + 并发锁，避免重复 API 调用
+- 请求失败自动废弃 IP，下次请求获取新 IP
 
 ### 查询参数
 
@@ -164,6 +174,11 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 | `RSS_MODE` | false | 默认 RSS 输出 |
 | `API_KEY_ENABLE` | false | 是否启用 API Key 鉴权 |
 | `API_KEY` | 空 | API 密钥（`API_KEY_ENABLE=true` 时必填） |
+| `KDL_ENABLE` | false | 是否启用快代理（国内站点） |
+| `KDL_SECRET_ID` | 空 | 快代理 SecretId |
+| `KDL_SIGNATURE` | 空 | 快代理 SecretKey |
+| `KDL_USERNAME` | 空 | 快代理用户名（代理认证） |
+| `KDL_PASSWORD` | 空 | 快代理密码（代理认证） |
 
 ## API 鉴权
 
@@ -177,6 +192,29 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 # 生产环境请求示例
 curl -H "X-API-Key: your-key" https://dailyhot.runfast.xyz/bilibili
 ```
+
+## 环境配置管理
+
+项目维护两份环境配置文件，区分开发和生产环境：
+
+| 文件 | 用途 | `API_KEY_ENABLE` | `KDL_ENABLE` |
+|------|------|------------------|--------------|
+| `.env` | 本地开发 | `false` | `false` |
+| `.env.production` | ECS 生产 | `true` | `true` |
+
+- 两份文件均已加入 `.gitignore`
+- 部署方式一（dist only）：不影响 ECS `.env`
+- 部署方式二（全量）：rsync 排除 `.env`，上传后 `mv .env.production .env`
+
+## Coze 集成
+
+`docs/coze/` 目录包含 Coze 工作流集成资源：
+
+- `http-node-guide.md` — HTTP 请求节点配置指南
+- `json-body-js/normalize.js` — 响应归一化（提取 6 字段：platform、updateTime、title、desc、cover、url）
+- `json-body-js/flatten.js` — 循环结果合并（移除 data 层级，输出扁平数组）
+
+> 注意：Coze HTTP 节点返回的 body 是 JSON 字符串，代码中需 `JSON.parse` 处理。
 
 ## 重要约定
 

@@ -1,6 +1,6 @@
 # Coze HTTP 请求节点接入 DailyHotApi 指南
 
-> 版本: v1.0 | 更新时间: 2026-03-02
+> 版本: v1.1 | 更新时间: 2026-03-03
 
 ---
 
@@ -228,3 +228,27 @@ HTTP 请求节点会收到如下 JSON 响应，可在后续节点中引用：
 ### 超时
 
 DailyHotApi 默认请求超时 6 秒，Coze HTTP 节点建议设置超时为 **10 秒以上**。
+
+---
+
+## 数据处理脚本
+
+项目提供了两个 Coze 代码节点脚本，用于处理 HTTP 请求节点的响应数据。
+
+位于 `docs/coze/json-body-js/` 目录：
+
+### normalize.js — 响应归一化
+
+在循环体内使用，将单个平台的 API 响应精简为 6 个核心字段：
+
+- 输入：HTTP 请求节点的 body（JSON 字符串）
+- 输出：`data` 数组，每条含 `platform`、`updateTime`、`title`、`desc`、`cover`、`url`
+
+### flatten.js — 循环结果合并
+
+在循环体外使用，将多个平台的循环结果合并为一个扁平数组：
+
+- 输入：循环节点的 `output`（包含多个 data 数组）
+- 输出：`output` 扁平数组，移除 data 嵌套层级
+
+> 注意：HTTP 请求节点返回的 body 是 JSON 字符串，脚本中已内置 `JSON.parse` 兼容处理。
