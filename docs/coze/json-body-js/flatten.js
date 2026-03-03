@@ -16,7 +16,7 @@ async function main({ params }: Args): Promise<Output> {
         const items = Array.isArray(parsed.data) ? parsed.data : [parsed];
         return items.map((item: any) => ({
             platform: item.platform || "",
-            updateTime: item.updateTime || "",
+            updateTime: item.updateTime ? new Date(item.updateTime).getTime() : 0,
             title: item.title || "",
             desc: item.desc || "",
             cover: item.cover || "",
