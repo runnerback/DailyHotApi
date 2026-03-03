@@ -14,6 +14,13 @@ async function main({ params }) {
         if (typeof fields.sort === "string") {
             fields.sort = fields.sort ? [fields.sort] : [];
         }
+        // 评分字段除以100：80 → 0.8
+        if (typeof fields["perler-beads-score"] === "number") {
+            fields["perler-beads-score"] = fields["perler-beads-score"] / 100;
+        }
+        if (typeof fields["us-stocks-score"] === "number") {
+            fields["us-stocks-score"] = fields["us-stocks-score"] / 100;
+        }
         // 飞书超链接字段需要对象格式："https://..." → {"link": "https://...", "text": "标题"}
         if (typeof fields.url === "string") {
             fields.url = fields.url ? { link: fields.url, text: fields.title || fields.url } : {};
