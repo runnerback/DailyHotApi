@@ -14,6 +14,10 @@ async function main({ params }) {
         if (typeof fields.sort === "string") {
             fields.sort = fields.sort ? [fields.sort] : [];
         }
+        // 飞书超链接字段需要对象格式："https://..." → {"link": "https://...", "text": "标题"}
+        if (typeof fields.url === "string") {
+            fields.url = fields.url ? { link: fields.url, text: fields.title || fields.url } : {};
+        }
         return { fields };
     });
 
