@@ -8,9 +8,14 @@ async function main({ params }) {
     const list = typeof raw === "string" ? JSON.parse(raw) : (raw || []);
     const arr = Array.isArray(list) ? list : [list];
 
-    const records = arr.map((item) => ({
-        fields: item,
-    }));
+    const records = arr.map((item) => {
+        const fields = { ...item };
+        // 飞书多选字段需要数组格式："美股" → ["美股"]，"" → []
+        if (typeof fields.sort === "string") {
+            fields.sort = fields.sort ? [fields.sort] : [];
+        }
+        return { fields };
+    });
 
     return { records };
 }
