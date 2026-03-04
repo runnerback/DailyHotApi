@@ -123,16 +123,11 @@ const CozeScheduler: FC = () => {
       </head>
       <body>
         <div className="header">
-          <a href="/">← 返回首页</a>
           <h1>Coze 工作流调度配置</h1>
         </div>
 
         {/* 循环任务 */}
         <div className="section">
-          <div className="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-            <span>循环任务</span>
-            <button className="btn btn-primary btn-sm" id="btn-add-recurring">+ 添加</button>
-          </div>
           <table>
             <thead>
               <tr>
