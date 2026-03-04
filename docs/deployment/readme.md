@@ -1,6 +1,6 @@
 # DailyHotApi 部署文档
 
-> 版本: v1.5 | 更新时间: 2026-03-04
+> 版本: v1.6 | 更新时间: 2026-03-04
 
 ---
 
@@ -242,8 +242,11 @@ curl -H "X-API-Key: your-secret-key-here" https://dailyhot.runfast.xyz/weibo | h
 curl https://dailyhot.runfast.xyz/weibo
 # {"code":401,"message":"Unauthorized"}
 
-# 查看所有平台（需携带 API Key）
-curl -H "X-API-Key: your-secret-key-here" https://dailyhot.runfast.xyz/all
+# 查看所有平台（免鉴权）
+curl https://dailyhot.runfast.xyz/all
+
+# 平台接口列表页面（免鉴权）
+# https://dailyhot.runfast.xyz/endpoints
 ```
 
 ---

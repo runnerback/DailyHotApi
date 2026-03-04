@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> 版本: v1.3 | 更新时间: 2026-03-04
+> 版本: v1.4 | 更新时间: 2026-03-04
 
 本文件为 Claude Code 在此代码库工作时提供指导。
 
@@ -62,7 +62,7 @@ src/
 │   └── getToken/         # 平台认证（Bilibili WBI、Weread、Coolapk）
 ├── coze-routes.ts        # Coze 路由（工作流触发）
 ├── coze-JWT-auth-private-key/  # Coze 服务类应用私钥（.gitignore）
-└── views/                # JSX 页面（首页、错误页、404）
+└── views/                # JSX 页面（首页、平台列表、错误页、404）
 ```
 
 ### 核心模式
@@ -70,7 +70,8 @@ src/
 **动态路由注册** (`registry.ts`):
 - 自动扫描 `src/routes/` 目录
 - 文件名即路由路径（如 `bilibili.ts` → `GET /bilibili`）
-- 特殊端点 `GET /all` 返回所有可用路由列表
+- 特殊端点 `GET /all` 返回所有可用路由列表（JSON）
+- 特殊端点 `GET /endpoints` 平台接口列表页面（HTML 表格，含 type 参数详情 tooltip）
 
 **路由处理器模式** (每个 route 文件):
 ```typescript
@@ -193,7 +194,7 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 
 - **ECS 生产环境**：`.env` 设置 `API_KEY_ENABLE=true` + `API_KEY=密钥`
 - **本地开发环境**：`.env` 设置 `API_KEY_ENABLE=false`，无需携带 Key
-- **免鉴权路径**：`/`、`/robots.txt`、`/favicon.ico`、`/favicon.png`
+- **免鉴权路径**：`/`、`/all`、`/endpoints`、`/robots.txt`、`/favicon.ico`、`/favicon.png`
 
 ```bash
 # 生产环境请求示例
