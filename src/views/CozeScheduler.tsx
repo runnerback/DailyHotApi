@@ -200,6 +200,20 @@ const CozeScheduler: FC = () => {
           </div>
         </div>
 
+        {/* 鉴权弹窗 */}
+        <div className="modal-overlay" id="auth-overlay">
+          <div className="modal">
+            <h3>请输入 API Key</h3>
+            <div className="form-group">
+              <label>API Key</label>
+              <input type="password" id="auth-key-input" placeholder="输入 API Key 后自动保存" />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-primary" id="btn-auth-save">确认</button>
+            </div>
+          </div>
+        </div>
+
         <script src="/scheduler.js"></script>
       </body>
     </html>
