@@ -1,19 +1,16 @@
-// Coze OAuth token 管理 + 工作流 API 调用
-// 授权码模式：首次浏览器授权 → refresh_token 自动续期
-// Token 持久化到 Redis，PM2 重启不丢失
+// Coze JWT 鉴权 + 工作流 API 调用
+// 服务类应用：私钥签名 JWT → 换取 access_token → 调用工作流
+// 免用户授权，服务端自主完成
 
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import axios from "axios";
 import { config } from "../config.js";
-import { redis, ensureRedisConnection } from "./cache.js";
 import logger from "./logger.js";
 
 // ==================== 类型 ====================
-
-interface CozeTokenData {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number; // access_token 到期绝对时间戳(ms)
-}
 
 interface CozeWorkflowResponse {
   code: number;
@@ -23,168 +20,103 @@ interface CozeWorkflowResponse {
 
 // ==================== 常量 ====================
 
-const REDIS_KEY = "coze:token";
-// 提前 2 分钟视为过期（access_token 有效期 15 分钟）
-const SAFETY_MARGIN_MS = 2 * 60 * 1000;
+// 提前 5 分钟视为过期（JWT 换取的 access_token 有效期最大 24 小时）
+const SAFETY_MARGIN_MS = 5 * 60 * 1000;
+// access_token 请求的有效期（秒），最大 86400（24 小时）
+const TOKEN_DURATION_SECONDS = 86400;
 
-// ==================== 内存缓存 + 并发锁 ====================
+// ==================== 私钥加载 ====================
 
-let cachedToken: CozeTokenData | null = null;
-let refreshingPromise: Promise<CozeTokenData> | null = null;
+const privateKeyPath = path.join(process.cwd(), "src/coze-JWT-auth-private-key/private_key.pem");
+const privateKey = fs.readFileSync(privateKeyPath, "utf-8");
+logger.info(`🔑 [COZE] 私钥已加载: ${privateKeyPath}`);
 
-// Basic Auth header: base64(client_id:client_secret)
-function getBasicAuthHeader(): string {
-  const credentials = Buffer.from(`${config.COZE_CLIENT_ID}:${config.COZE_CLIENT_SECRET}`).toString("base64");
-  return `Basic ${credentials}`;
-}
-
-// ==================== Redis 存取 ====================
-
-async function saveTokenToRedis(token: CozeTokenData): Promise<void> {
-  await ensureRedisConnection();
-  await redis.set(REDIS_KEY, JSON.stringify(token));
-  logger.info("🔑 [COZE] Token 已保存到 Redis");
-}
-
-async function loadTokenFromRedis(): Promise<CozeTokenData | null> {
-  await ensureRedisConnection();
-  const raw = await redis.get(REDIS_KEY);
-  if (!raw) return null;
-  return JSON.parse(raw) as CozeTokenData;
-}
-
-// ==================== OAuth ====================
+// ==================== JWT 签名 ====================
 
 /**
- * 生成 Coze OAuth 授权页面 URL
+ * 生成 RS256 签名的 JWT
  */
-export function getAuthorizeUrl(state: string): string {
-  const params = new URLSearchParams({
-    client_id: config.COZE_CLIENT_ID,
-    redirect_uri: config.COZE_REDIRECT_URL,
-    response_type: "code",
-    state,
-  });
-  return `https://www.coze.cn/api/permission/oauth2/authorize?${params.toString()}`;
-}
-
-/**
- * 用授权码换取 access_token + refresh_token
- */
-export async function exchangeCodeForToken(code: string): Promise<CozeTokenData> {
-  logger.info("🔄 [COZE] 用授权码换取 token...");
-
-  const response = await axios.post(
-    "https://api.coze.cn/api/permission/oauth2/token",
-    {
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: config.COZE_REDIRECT_URL,
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: getBasicAuthHeader(),
-      },
-    },
-  ).catch((err) => {
-    logger.error(`❌ [COZE] token 交换失败: ${JSON.stringify(err.response?.data)}`);
-    throw err;
-  });
-
-  const { access_token, refresh_token, expires_in } = response.data;
-  const tokenData: CozeTokenData = {
-    access_token,
-    refresh_token,
-    expires_at: Date.now() + expires_in * 1000 - SAFETY_MARGIN_MS,
+function generateJWT(): string {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: config.COZE_CLIENT_ID,
+    aud: "api.coze.cn",
+    iat: now,
+    exp: now + 3600,
+    jti: `${now}:${crypto.randomBytes(16).toString("hex")}`,
   };
-
-  cachedToken = tokenData;
-  await saveTokenToRedis(tokenData);
-  logger.info(`✅ [COZE] 授权成功，access_token 有效期 ${expires_in} 秒`);
-  return tokenData;
+  return jwt.sign(payload, privateKey, {
+    algorithm: "RS256",
+    header: { alg: "RS256", typ: "JWT", kid: config.COZE_PUBLIC_KEY_ID },
+  });
 }
 
 // ==================== Token 管理 ====================
 
+let cachedToken: { access_token: string; expires_at: number } | null = null;
+let fetchingPromise: Promise<string> | null = null;
+
 /**
- * 用 refresh_token 刷新 access_token
+ * 用 JWT 换取 access_token
  */
-async function refreshAccessToken(refreshToken: string): Promise<CozeTokenData> {
-  logger.info("🔄 [COZE] 刷新 access_token...");
+async function fetchAccessToken(): Promise<{ access_token: string; expires_in: number }> {
+  const jwtToken = generateJWT();
+  logger.info("🔄 [COZE] 用 JWT 换取 access_token...");
 
   const response = await axios.post(
     "https://api.coze.cn/api/permission/oauth2/token",
     {
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
+      duration_seconds: TOKEN_DURATION_SECONDS,
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
     },
     {
       headers: {
+        Authorization: `Bearer ${jwtToken}`,
         "Content-Type": "application/json",
-        Authorization: getBasicAuthHeader(),
       },
+      // api.coze.cn 是国内 API，禁用代理避免重定向循环
+      proxy: false,
     },
   ).catch((err) => {
-    logger.error(`❌ [COZE] token 刷新失败: ${JSON.stringify(err.response?.data)}`);
+    logger.error(`❌ [COZE] access_token 获取失败: status=${err.response?.status}, data=${JSON.stringify(err.response?.data)}, message=${err.message}`);
     throw err;
   });
 
-  const { access_token, refresh_token, expires_in } = response.data;
-  const tokenData: CozeTokenData = {
-    access_token,
-    refresh_token,
-    expires_at: Date.now() + expires_in * 1000 - SAFETY_MARGIN_MS,
-  };
-
-  cachedToken = tokenData;
-  await saveTokenToRedis(tokenData);
-  logger.info(`✅ [COZE] access_token 刷新成功，有效期 ${expires_in} 秒`);
-  return tokenData;
+  const { access_token, expires_in } = response.data;
+  logger.info(`✅ [COZE] access_token 获取成功，有效期 ${expires_in} 秒`);
+  return { access_token, expires_in };
 }
 
 /**
- * 获取有效的 access_token（自动刷新）
- * 优先级：内存缓存 → Redis → 刷新 → 抛错要求重新授权
+ * 获取有效的 access_token（自动续期）
+ * 内存缓存 + 并发锁，过期直接重新签发 JWT
  */
 export async function getValidAccessToken(): Promise<string> {
-  const now = Date.now();
-
   // 1. 内存缓存有效
-  if (cachedToken && cachedToken.expires_at > now) {
+  if (cachedToken && cachedToken.expires_at > Date.now()) {
     return cachedToken.access_token;
   }
 
-  // 2. 并发锁：正在刷新中，等待结果
-  if (refreshingPromise) {
-    const token = await refreshingPromise;
-    return token.access_token;
+  // 2. 并发锁：正在获取中，等待结果
+  if (fetchingPromise) {
+    return fetchingPromise;
   }
 
-  // 3. 内存无缓存，从 Redis 加载
-  if (!cachedToken) {
-    cachedToken = await loadTokenFromRedis();
-  }
+  // 3. 签发 JWT 获取新 token
+  fetchingPromise = (async () => {
+    try {
+      const { access_token, expires_in } = await fetchAccessToken();
+      cachedToken = {
+        access_token,
+        expires_at: Date.now() + expires_in * 1000 - SAFETY_MARGIN_MS,
+      };
+      return access_token;
+    } finally {
+      fetchingPromise = null;
+    }
+  })();
 
-  // 4. Redis 也没有 token，需要重新授权
-  if (!cachedToken) {
-    throw new Error("未授权：请先访问 /coze/authorize 完成 OAuth 授权");
-  }
-
-  // 5. access_token 过期，用 refresh_token 刷新
-  if (cachedToken.expires_at <= now) {
-    refreshingPromise = (async () => {
-      try {
-        return await refreshAccessToken(cachedToken!.refresh_token);
-      } finally {
-        refreshingPromise = null;
-      }
-    })();
-    const token = await refreshingPromise;
-    return token.access_token;
-  }
-
-  return cachedToken.access_token;
+  return fetchingPromise;
 }
 
 // ==================== 工作流调用 ====================
@@ -208,6 +140,7 @@ export async function runWorkflow(
         "Content-Type": "application/json",
       },
       timeout: 60000,
+      proxy: false,
     },
   );
 

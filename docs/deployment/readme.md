@@ -1,6 +1,6 @@
 # DailyHotApi 部署文档
 
-> 版本: v1.4 | 更新时间: 2026-03-04
+> 版本: v1.5 | 更新时间: 2026-03-04
 
 ---
 
@@ -56,7 +56,7 @@ ssh root@115.190.207.149 "pm2 restart daily-hot"
 │  ├─ 端口: 15000                                    │
 │  ├─ 框架: Hono 4.x + TypeScript                   │
 │  ├─ 缓存: Redis + NodeCache                       │
-│  └─ Coze OAuth: token 持久化到 Redis               │
+│  └─ Coze JWT: 服务类应用免授权鉴权                   │
 │                                                    │
 │  Redis Server                                      │
 │  └─ 端口: 6379 (localhost)                         │
@@ -150,32 +150,15 @@ mv .env.production .env
 
 > 后续更新部署（方式二）会自动完成重命名，无需手动操作。
 
-### 3.4 Coze OAuth 首次授权
+### 3.4 上传 Coze 私钥文件
 
-部署完成后，需要在浏览器中完成一次 Coze OAuth 授权，获取 refresh_token（30 天有效）。
+Coze JWT 鉴权需要 RSA 私钥文件，该文件不在 git 中（已 .gitignore）。
 
 ```bash
-# 1. 浏览器访问（仅一次）
-https://dailyhot.runfast.xyz/coze/authorize
-
-# 2. 页面跳转到 Coze 授权页，点击「授权」
-# 3. 回调成功后返回 JSON：{"code":200,"message":"OAuth 授权成功，token 已保存"}
-
-# 4. 验证 Redis 中已保存 token
-redis-cli get coze:token
-
-# 5. 触发工作流测试
-curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
-  -H "X-API-Key: your-key" \
-  -H "Content-Type: application/json" \
-  -d '{}'
+# 本地上传私钥到 ECS
+rsync -avz src/coze-JWT-auth-private-key/ \
+  root@115.190.207.149:/var/www/dailyhot-api/src/coze-JWT-auth-private-key/
 ```
-
-**注意事项**：
-- access_token 有效期 15 分钟，服务自动通过 refresh_token 刷新
-- refresh_token 有效期 30 天，过期后需重新浏览器授权
-- Token 持久化在 Redis（key: `coze:token`），PM2 重启不丢失
-- `.env` 中 `COZE_REDIRECT_URL` 必须与 Coze 开放平台 OAuth 应用配置的回调地址一致
 
 ### 3.5 更新 PM2 配置
 
@@ -328,8 +311,7 @@ sudo tail -f /var/log/nginx/dailyhot.error.log   # 错误日志
 redis-cli ping            # 连通性测试
 redis-cli info memory     # 内存使用
 redis-cli dbsize          # 缓存键数量
-redis-cli get coze:token  # 查看 Coze OAuth token
-redis-cli flushdb         # 清空缓存（谨慎，会删除 coze:token）
+redis-cli flushdb         # 清空缓存（谨慎）
 ```
 
 ### SSL 证书
@@ -386,8 +368,9 @@ redis-cli ping
 /var/www/dailyhot-api/          # 项目根目录
 ├── dist/                       # 编译产物
 ├── src/                        # 源码
-│   ├── utils/coze.ts           # Coze OAuth token 管理
-│   └── coze-routes.ts          # Coze 路由端点
+│   ├── utils/coze.ts           # Coze JWT 鉴权 + 工作流调用
+│   ├── coze-routes.ts          # Coze 工作流路由
+│   └── coze-JWT-auth-private-key/  # RSA 私钥（需手动上传）
 ├── logs/                       # 运行日志
 ├── .env                        # 环境配置（含 COZE_* 变量）
 ├── ecosystem.config.cjs        # PM2 配置
@@ -450,17 +433,15 @@ OOM Killer → sshd 被杀 → SSH 无法连接
 - 本地构建 → rsync 上传 `dist/`
 - 参见文档顶部「禁止在 ECS 上执行 tsc 编译」章节
 
-### Coze OAuth 授权失败 / Token 过期
+### Coze 工作流调用失败
 
 ```
-❌ [COZE] token 刷新失败
-未授权：请先访问 /coze/authorize 完成 OAuth 授权
+❌ [COZE] access_token 获取失败
 ```
 
-- **refresh_token 过期**（30 天有效）：重新浏览器访问 `https://dailyhot.runfast.xyz/coze/authorize` 授权
-- **redirect_uri 不匹配**：确认 `.env` 中 `COZE_REDIRECT_URL` 与 Coze 开放平台 OAuth 应用配置一致
-- **Redis 中 token 丢失**：检查 `redis-cli get coze:token`，如为空需重新授权
-- **清空 Redis 后需重新授权**：`flushdb` 会删除 `coze:token`，需重新浏览器授权
+- **私钥文件缺失**：确认 `src/coze-JWT-auth-private-key/private_key.pem` 存在
+- **配置错误**：检查 `.env` 中 `COZE_CLIENT_ID` 和 `COZE_PUBLIC_KEY_ID` 是否正确
+- **Coze 服务类应用权限**：确认 Coze 开放平台应用已配置工作流调用权限
 
 ### SSL 证书过期
 
@@ -477,38 +458,41 @@ sudo nginx -s reload
 
 ## 10. Coze 集成
 
+### 鉴权方式
+
+JWT 鉴权（服务类应用），免用户授权。私钥签名 JWT → 换取 access_token → 调用工作流。
+
 ### 环境变量
 
 | 变量 | 说明 |
 |------|------|
-| `COZE_CLIENT_ID` | Coze OAuth 客户端 ID |
-| `COZE_CLIENT_SECRET` | Coze OAuth 客户端密钥 |
-| `COZE_REDIRECT_URL` | OAuth 回调地址（本地: `http://localhost:15000/coze/callback`，ECS: `https://dailyhot.runfast.xyz/coze/callback`） |
+| `COZE_CLIENT_ID` | Coze 服务类应用 ID |
+| `COZE_PUBLIC_KEY_ID` | JWT 公钥指纹 |
 | `COZE_SPACE_ID` | Coze 工作空间 ID |
 | `COZE_WORKFLOW_ID` | 默认工作流 ID |
+
+### 私钥文件
+
+- 路径：`src/coze-JWT-auth-private-key/private_key.pem`
+- 已加入 `.gitignore`，部署时需手动上传到 ECS
+- RSA 2048 位，RS256 签名算法
 
 ### 路由
 
 | 路由 | 方法 | 鉴权 | 说明 |
 |------|------|------|------|
-| `/coze/authorize` | GET | 免鉴权 | 重定向到 Coze 授权页 |
-| `/coze/callback` | GET | 免鉴权 | Coze 回调，用授权码换取 token |
 | `/coze/workflow/run` | POST | 需 API Key | 触发 Coze 工作流 |
 
 ### Token 策略
 
-- access_token 有效期 15 分钟，提前 2 分钟自动刷新
-- refresh_token 有效期 30 天，过期需重新浏览器授权
-- Token 持久化到 Redis（key: `coze:token`），PM2 重启不丢失
-- 凭证通过 `Authorization: Basic base64(client_id:client_secret)` header 传递
+- 私钥签名 JWT → 换取 access_token（最大 24 小时有效期）
+- 内存缓存 + 提前 5 分钟自动续期
+- 无需浏览器授权、无需 refresh_token、无需 Redis 存储
 
 ### 使用示例
 
 ```bash
-# 首次授权（浏览器访问，仅一次，30 天有效）
-https://dailyhot.runfast.xyz/coze/authorize
-
-# 触发工作流
+# 触发工作流（免授权，直接调用）
 curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
