@@ -12,7 +12,9 @@ import cozeRoutes from "./coze-routes.js";
 import robotstxt from "./robots.txt.js";
 import NotFound from "./views/NotFound.js";
 import Home from "./views/Home.js";
+import Endpoints from "./views/Endpoints.js";
 import Error from "./views/Error.js";
+import { getCozeStatus } from "./utils/coze.js";
 
 const app = new Hono();
 
@@ -62,7 +64,12 @@ app.route("/", registry);
 // robots
 app.get("/robots.txt", robotstxt);
 // 首页
-app.get("/", (c) => c.html(<Home />));
+app.get("/", (c) => {
+  const status = getCozeStatus();
+  return c.html(<Home cozeConfigured={status.configured} cozeHasToken={status.hasToken} />);
+});
+// 平台接口列表
+app.get("/endpoints", (c) => c.html(<Endpoints />));
 // 404
 app.notFound((c) => c.html(<NotFound />, 404));
 // error

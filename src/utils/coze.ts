@@ -119,6 +119,19 @@ export async function getValidAccessToken(): Promise<string> {
   return fetchingPromise;
 }
 
+// ==================== 状态查询 ====================
+
+/**
+ * 返回 Coze JWT 鉴权状态（同步）
+ */
+export function getCozeStatus(): { configured: boolean; hasToken: boolean; tokenExpiresAt: number | null } {
+  return {
+    configured: !!(config.COZE_CLIENT_ID && config.COZE_PUBLIC_KEY_ID),
+    hasToken: !!(cachedToken && cachedToken.expires_at > Date.now()),
+    tokenExpiresAt: cachedToken?.expires_at ?? null,
+  };
+}
+
 // ==================== 工作流调用 ====================
 
 /**
