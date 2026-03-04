@@ -175,7 +175,6 @@ const Endpoints: FC = () => {
         <Style>{pageClass}</Style>
       </head>
       <body>
-        <a href="/" className="back-link">&larr; 返回首页</a>
         <h1>平台接口列表</h1>
         <p className="subtitle">共 {platforms.length} 个平台 | 所有接口均为 GET 请求</p>
         <table>
