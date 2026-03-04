@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> 版本: v1.1 | 更新时间: 2026-03-03
+> 版本: v1.2 | 更新时间: 2026-03-04
 
 本文件为 Claude Code 在此代码库工作时提供指导。
 
@@ -58,7 +58,9 @@ src/
 │   ├── parseRSS.ts       # RSS 解析
 │   ├── auth.ts           # API Key 鉴权中间件
 │   ├── kuaidaili.ts      # 快代理（KuaiDaiLi）代理管理
+│   ├── coze.ts           # Coze OAuth token 管理 + 工作流 API 调用
 │   └── getToken/         # 平台认证（Bilibili WBI、Weread、Coolapk）
+├── coze-routes.ts        # Coze 路由（OAuth 授权/回调、工作流触发）
 └── views/                # JSX 页面（首页、错误页、404）
 ```
 
@@ -179,6 +181,11 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 | `KDL_SIGNATURE` | 空 | 快代理 SecretKey |
 | `KDL_USERNAME` | 空 | 快代理用户名（代理认证） |
 | `KDL_PASSWORD` | 空 | 快代理密码（代理认证） |
+| `COZE_CLIENT_ID` | 空 | Coze OAuth 客户端 ID |
+| `COZE_CLIENT_SECRET` | 空 | Coze OAuth 客户端密钥 |
+| `COZE_REDIRECT_URL` | 空 | Coze OAuth 回调地址 |
+| `COZE_SPACE_ID` | 空 | Coze 工作空间 ID |
+| `COZE_WORKFLOW_ID` | 空 | Coze 工作流 ID |
 
 ## API 鉴权
 
@@ -186,7 +193,7 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 
 - **ECS 生产环境**：`.env` 设置 `API_KEY_ENABLE=true` + `API_KEY=密钥`
 - **本地开发环境**：`.env` 设置 `API_KEY_ENABLE=false`，无需携带 Key
-- **免鉴权路径**：`/`、`/robots.txt`、`/favicon.ico`、`/favicon.png`
+- **免鉴权路径**：`/`、`/robots.txt`、`/favicon.ico`、`/favicon.png`、`/coze/authorize`、`/coze/callback`
 
 ```bash
 # 生产环境请求示例
@@ -208,11 +215,46 @@ curl -H "X-API-Key: your-key" https://dailyhot.runfast.xyz/bilibili
 
 ## Coze 集成
 
+### OAuth + 工作流触发
+
+DailyHotApi 通过 Coze OAuth 授权码模式主动触发 Coze 工作流（如 `get_news_to_feishu`）。
+
+**核心文件**：
+- `src/utils/coze.ts` — OAuth token 管理（内存缓存 + Redis 持久化 + 自动刷新）+ 工作流 API 调用
+- `src/coze-routes.ts` — 三个路由端点，挂载到 `/coze` 路径
+
+**路由**：
+
+| 路由 | 方法 | 鉴权 | 说明 |
+|------|------|------|------|
+| `/coze/authorize` | GET | 免鉴权 | 重定向到 Coze 授权页 |
+| `/coze/callback` | GET | 免鉴权 | Coze 回调，用授权码换取 token |
+| `/coze/workflow/run` | POST | 需 API Key | 触发 Coze 工作流 |
+
+**Token 策略**：
+- access_token 有效期 15 分钟，提前 2 分钟自动刷新
+- refresh_token 有效期 30 天，过期需重新浏览器授权
+- Token 持久化到 Redis（key: `coze:token`），PM2 重启不丢失
+- 凭证通过 `Authorization: Basic base64(client_id:client_secret)` header 传递
+
+**使用流程**：
+```bash
+# 首次授权（浏览器访问，仅一次）
+https://dailyhot.runfast.xyz/coze/authorize
+
+# 触发工作流
+curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
+  -H "X-API-Key: your-key" -H "Content-Type: application/json" -d '{}'
+```
+
+### Coze 工作流脚本
+
 `docs/coze/` 目录包含 Coze 工作流集成资源：
 
 - `http-node-guide.md` — HTTP 请求节点配置指南
 - `json-body-js/normalize.js` — 响应归一化（提取 6 字段：platform、updateTime、title、desc、cover、url）
 - `json-body-js/flatten.js` — 循环结果合并（移除 data 层级，输出扁平数组）
+- `json-body-js/to-feishu-records.js` — 转换为飞书多维表格 add_records 格式
 
 > 注意：Coze HTTP 节点返回的 body 是 JSON 字符串，代码中需 `JSON.parse` 处理。
 
