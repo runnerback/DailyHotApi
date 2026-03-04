@@ -32,6 +32,12 @@ const SAFETY_MARGIN_MS = 2 * 60 * 1000;
 let cachedToken: CozeTokenData | null = null;
 let refreshingPromise: Promise<CozeTokenData> | null = null;
 
+// Basic Auth header: base64(client_id:client_secret)
+function getBasicAuthHeader(): string {
+  const credentials = Buffer.from(`${config.COZE_CLIENT_ID}:${config.COZE_CLIENT_SECRET}`).toString("base64");
+  return `Basic ${credentials}`;
+}
+
 // ==================== Redis 存取 ====================
 
 async function saveTokenToRedis(token: CozeTokenData): Promise<void> {
@@ -67,19 +73,24 @@ export function getAuthorizeUrl(state: string): string {
  */
 export async function exchangeCodeForToken(code: string): Promise<CozeTokenData> {
   logger.info("🔄 [COZE] 用授权码换取 token...");
-  const params = new URLSearchParams({
-    grant_type: "authorization_code",
-    code,
-    client_id: config.COZE_CLIENT_ID,
-    client_secret: config.COZE_CLIENT_SECRET,
-    redirect_uri: config.COZE_REDIRECT_URL,
-  });
 
   const response = await axios.post(
     "https://api.coze.cn/api/permission/oauth2/token",
-    params.toString(),
-    { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
-  );
+    {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: config.COZE_REDIRECT_URL,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: getBasicAuthHeader(),
+      },
+    },
+  ).catch((err) => {
+    logger.error(`❌ [COZE] token 交换失败: ${JSON.stringify(err.response?.data)}`);
+    throw err;
+  });
 
   const { access_token, refresh_token, expires_in } = response.data;
   const tokenData: CozeTokenData = {
@@ -101,18 +112,23 @@ export async function exchangeCodeForToken(code: string): Promise<CozeTokenData>
  */
 async function refreshAccessToken(refreshToken: string): Promise<CozeTokenData> {
   logger.info("🔄 [COZE] 刷新 access_token...");
-  const params = new URLSearchParams({
-    grant_type: "refresh_token",
-    refresh_token: refreshToken,
-    client_id: config.COZE_CLIENT_ID,
-    client_secret: config.COZE_CLIENT_SECRET,
-  });
 
   const response = await axios.post(
     "https://api.coze.cn/api/permission/oauth2/token",
-    params.toString(),
-    { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
-  );
+    {
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    },
+    {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: getBasicAuthHeader(),
+      },
+    },
+  ).catch((err) => {
+    logger.error(`❌ [COZE] token 刷新失败: ${JSON.stringify(err.response?.data)}`);
+    throw err;
+  });
 
   const { access_token, refresh_token, expires_in } = response.data;
   const tokenData: CozeTokenData = {
