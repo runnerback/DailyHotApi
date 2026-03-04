@@ -3,7 +3,7 @@ import { config } from "../config.js";
 import logger from "./logger.js";
 
 // 免鉴权路径
-const PUBLIC_PATHS = ["/", "/all", "/endpoints", "/robots.txt", "/favicon.ico", "/favicon.png"];
+const PUBLIC_PATHS = ["/", "/all", "/endpoints", "/coze/scheduler", "/robots.txt", "/favicon.ico", "/favicon.png"];
 
 // API Key 鉴权中间件
 const apiKeyAuth: MiddlewareHandler = async (c, next) => {

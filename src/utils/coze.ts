@@ -140,6 +140,7 @@ export function getCozeStatus(): { configured: boolean; hasToken: boolean; token
 export async function runWorkflow(
   workflowId: string = config.COZE_WORKFLOW_ID,
   parameters: Record<string, unknown> = {},
+  timeoutMs: number = 15 * 60 * 1000,
 ): Promise<CozeWorkflowResponse> {
   const accessToken = await getValidAccessToken();
 
@@ -152,7 +153,7 @@ export async function runWorkflow(
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      timeout: 60000,
+      timeout: timeoutMs,
       proxy: false,
     },
   );

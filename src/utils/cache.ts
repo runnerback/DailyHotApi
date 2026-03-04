@@ -21,8 +21,8 @@ const cache = new NodeCache({
   maxKeys: 100,
 });
 
-// init Redis client
-const redis = new Redis({
+// init Redis client（导出供 coze-scheduler 使用）
+export const redis = new Redis({
   host: config.REDIS_HOST,
   port: config.REDIS_PORT,
   password: config.REDIS_PASSWORD,
@@ -39,7 +39,7 @@ let isRedisAvailable: boolean = false;
 let isRedisTried: boolean = false;
 
 // Redis 连接状态
-const ensureRedisConnection = async () => {
+export const ensureRedisConnection = async () => {
   if (isRedisTried) return;
   try {
     if (redis.status !== "ready" && redis.status !== "connecting") await redis.connect();
