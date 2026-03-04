@@ -1,5 +1,4 @@
 import type { FC } from "hono/jsx";
-import { html } from "hono/html";
 
 const CozeScheduler: FC = () => {
   return (
@@ -128,6 +127,10 @@ const CozeScheduler: FC = () => {
 
         {/* 循环任务 */}
         <div className="section">
+          <div className="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>循环任务</span>
+            <button className="btn btn-primary btn-sm" id="btn-add-recurring">+ 添加</button>
+          </div>
           <table>
             <thead>
               <tr>
@@ -197,184 +200,7 @@ const CozeScheduler: FC = () => {
           </div>
         </div>
 
-        {html`<script>
-          // 从 URL 获取 API Key（生产环境需要 ?key=xxx）
-          const urlParams = new URLSearchParams(location.search);
-          const apiKey = urlParams.get("key") || "";
-
-          function headers() {
-            const h = { "Content-Type": "application/json" };
-            if (apiKey) h["X-API-Key"] = apiKey;
-            return h;
-          }
-
-          function statusBadge(status) {
-            const map = { idle: "空闲", running: "运行中", success: "成功", failed: "失败" };
-            return '<span class="badge badge-' + status + '">' + (map[status] || status) + '</span>';
-          }
-
-          function formatTime(iso) {
-            if (!iso) return "-";
-            const d = new Date(iso);
-            return d.toLocaleString("zh-CN", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit" });
-          }
-
-          // 加载循环任务
-          async function loadTasks() {
-            try {
-              const res = await fetch("/coze/scheduler/tasks", { headers: headers() });
-              const json = await res.json();
-              const tasks = json.data || [];
-              const recurring = tasks.filter(t => t.type === "recurring");
-              const tbody = document.getElementById("recurring-tbody");
-
-              if (recurring.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无循环任务</td></tr>';
-                return;
-              }
-
-              tbody.innerHTML = recurring.map(t => {
-                const resultText = t.lastResult
-                  ? 'code=' + t.lastResult.code + ' ' + (t.lastResult.msg || '').substring(0, 30)
-                  : '-';
-                return '<tr data-id="' + t.id + '">' +
-                  '<td>' + t.platform + '</td>' +
-                  '<td>' + t.limit + '</td>' +
-                  '<td>' + t.intervalHours + '</td>' +
-                  '<td>' + statusBadge(t.status) + '</td>' +
-                  '<td class="time-text">' + formatTime(t.lastRunAt) + '</td>' +
-                  '<td class="result-text" title="' + resultText + '">' + resultText + '</td>' +
-                  '<td><label class="toggle"><input type="checkbox" ' + (t.enabled ? 'checked' : '') +
-                    ' onchange="toggleTask(\'' + t.id + '\', this.checked)"><span class="slider"></span></label></td>' +
-                  '<td><button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + t.id + '\')">删除</button></td>' +
-                  '</tr>';
-              }).join("");
-            } catch (e) {
-              document.getElementById("recurring-tbody").innerHTML =
-                '<tr><td colspan="8" class="empty">加载失败: ' + e.message + '</td></tr>';
-            }
-          }
-
-          // 切换开关
-          async function toggleTask(id, enabled) {
-            await fetch("/coze/scheduler/tasks/" + id, {
-              method: "PATCH", headers: headers(),
-              body: JSON.stringify({ enabled }),
-            });
-          }
-
-          // 删除任务
-          async function deleteTask(id) {
-            if (!confirm("确定要删除此任务？")) return;
-            await fetch("/coze/scheduler/tasks/" + id, {
-              method: "DELETE", headers: headers(),
-            });
-            loadTasks();
-          }
-
-          // 添加弹窗
-          document.getElementById("btn-add-recurring").addEventListener("click", () => {
-            document.getElementById("modal-title").textContent = "添加循环任务";
-            document.getElementById("modal-platform").value = "";
-            document.getElementById("modal-limit").value = "1";
-            document.getElementById("modal-interval").value = "1";
-            document.getElementById("modal-task-id").value = "";
-            document.getElementById("modal-overlay").classList.add("active");
-          });
-
-          document.getElementById("btn-modal-cancel").addEventListener("click", () => {
-            document.getElementById("modal-overlay").classList.remove("active");
-          });
-
-          document.getElementById("btn-modal-save").addEventListener("click", async () => {
-            const platform = document.getElementById("modal-platform").value.trim();
-            if (!platform) { alert("Platform 不能为空"); return; }
-
-            const payload = {
-              type: "recurring",
-              platform,
-              limit: document.getElementById("modal-limit").value || "1",
-              intervalHours: parseInt(document.getElementById("modal-interval").value),
-              enabled: true,
-            };
-
-            const taskId = document.getElementById("modal-task-id").value;
-            if (taskId) {
-              await fetch("/coze/scheduler/tasks/" + taskId, {
-                method: "PATCH", headers: headers(), body: JSON.stringify(payload),
-              });
-            } else {
-              await fetch("/coze/scheduler/tasks", {
-                method: "POST", headers: headers(), body: JSON.stringify(payload),
-              });
-            }
-
-            document.getElementById("modal-overlay").classList.remove("active");
-            loadTasks();
-          });
-
-          // 单次执行
-          let execLogs = [];
-          document.getElementById("btn-execute-once").addEventListener("click", async () => {
-            const platform = document.getElementById("once-platform").value.trim();
-            if (!platform) { alert("Platform 不能为空"); return; }
-            const limit = document.getElementById("once-limit").value || "1";
-
-            const btn = document.getElementById("btn-execute-once");
-            btn.disabled = true;
-            btn.textContent = "执行中...";
-
-            const logItem = {
-              time: new Date().toLocaleString("zh-CN"),
-              platform, status: "running", msg: "",
-            };
-            execLogs.unshift(logItem);
-            renderExecLog();
-
-            try {
-              const res = await fetch("/coze/scheduler/execute", {
-                method: "POST", headers: headers(),
-                body: JSON.stringify({ platform, limit }),
-              });
-              const json = await res.json();
-              const data = json.data || {};
-              logItem.status = data.code === 0 ? "success" : "failed";
-              logItem.msg = "code=" + data.code + " " + (data.msg || "");
-              logItem.randomToken = data.randomToken;
-            } catch (e) {
-              logItem.status = "failed";
-              logItem.msg = e.message;
-            }
-
-            btn.disabled = false;
-            btn.textContent = "立即执行";
-            renderExecLog();
-          });
-
-          function renderExecLog() {
-            const el = document.getElementById("exec-log");
-            el.innerHTML = execLogs.slice(0, 10).map(l =>
-              '<div class="exec-log-item">' +
-                '<span class="time-text">' + l.time + '</span>' +
-                '<span>' + l.platform + '</span>' +
-                statusBadge(l.status) +
-                '<span class="result-text">' + (l.msg || "执行中...") + '</span>' +
-                (l.randomToken ? '<span class="result-text" title="' + l.randomToken + '">token:' + l.randomToken.substring(0, 8) + '...</span>' : '') +
-              '</div>'
-            ).join("");
-          }
-
-          // 点击遮罩关闭弹窗
-          document.getElementById("modal-overlay").addEventListener("click", (e) => {
-            if (e.target === e.currentTarget) {
-              e.currentTarget.classList.remove("active");
-            }
-          });
-
-          // 初始加载 + 定时刷新
-          loadTasks();
-          setInterval(loadTasks, 10000);
-        </script>`}
+        <script src="/scheduler.js"></script>
       </body>
     </html>
   );
