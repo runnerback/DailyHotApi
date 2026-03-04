@@ -8,6 +8,7 @@ import { trimTrailingSlash } from "hono/trailing-slash";
 import logger from "./utils/logger.js";
 import apiKeyAuth from "./utils/auth.js";
 import registry from "./registry.js";
+import cozeRoutes from "./coze-routes.js";
 import robotstxt from "./robots.txt.js";
 import NotFound from "./views/NotFound.js";
 import Home from "./views/Home.js";
@@ -51,6 +52,9 @@ app.use(
     rewriteRequestPath: (path) => (path === "/favicon.ico" ? "/favicon.png" : path),
   }),
 );
+
+// Coze OAuth + 工作流路由
+app.route("/coze", cozeRoutes);
 
 // 主路由
 app.route("/", registry);

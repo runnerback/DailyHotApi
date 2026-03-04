@@ -21,8 +21,8 @@ const cache = new NodeCache({
   maxKeys: 100,
 });
 
-// init Redis client
-const redis = new Redis({
+// init Redis client（导出供 coze.ts 等模块直接读写 Redis）
+export const redis = new Redis({
   host: config.REDIS_HOST,
   port: config.REDIS_PORT,
   password: config.REDIS_PASSWORD,
@@ -38,8 +38,8 @@ const redis = new Redis({
 let isRedisAvailable: boolean = false;
 let isRedisTried: boolean = false;
 
-// Redis 连接状态
-const ensureRedisConnection = async () => {
+// Redis 连接状态（导出供 coze.ts 等模块确保连接）
+export const ensureRedisConnection = async () => {
   if (isRedisTried) return;
   try {
     if (redis.status !== "ready" && redis.status !== "connecting") await redis.connect();

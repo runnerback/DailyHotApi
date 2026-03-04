@@ -25,6 +25,11 @@ export type Config = {
   KDL_SIGNATURE: string;
   KDL_USERNAME: string;
   KDL_PASSWORD: string;
+  COZE_CLIENT_ID: string;
+  COZE_CLIENT_SECRET: string;
+  COZE_REDIRECT_URL: string;
+  COZE_SPACE_ID: string;
+  COZE_WORKFLOW_ID: string;
 };
 
 // 验证并提取环境变量
@@ -71,4 +76,9 @@ export const config: Config = {
   KDL_SIGNATURE: getEnvVariable("KDL_SIGNATURE") || "",
   KDL_USERNAME: getEnvVariable("KDL_USERNAME") || "",
   KDL_PASSWORD: getEnvVariable("KDL_PASSWORD") || "",
+  COZE_CLIENT_ID: getEnvVariable("COZE_CLIENT_ID") || "",
+  COZE_CLIENT_SECRET: getEnvVariable("COZE_CLIENT_SECRET") || "",
+  COZE_REDIRECT_URL: getEnvVariable("COZE_REDIRECT_URL") || "",
+  COZE_SPACE_ID: getEnvVariable("COZE_SPACE_ID") || "",
+  COZE_WORKFLOW_ID: getEnvVariable("COZE_WORKFLOW_ID") || "",
 };
