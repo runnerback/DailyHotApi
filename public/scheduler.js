@@ -1,18 +1,13 @@
 // Coze 工作流调度配置页面脚本
 
-// API Key：优先 localStorage，其次 URL 参数
-var apiKey = localStorage.getItem("scheduler_api_key") || new URLSearchParams(location.search).get("key") || "";
+// API Key：从 script 标签的 data-api-key 属性读取（服务端注入）
+var scriptTag = document.currentScript || document.querySelector('script[data-api-key]');
+var apiKey = scriptTag ? scriptTag.getAttribute("data-api-key") : "";
 
 function getHeaders() {
   var h = { "Content-Type": "application/json" };
   if (apiKey) h["X-API-Key"] = apiKey;
   return h;
-}
-
-function showAuthModal() {
-  document.getElementById("auth-key-input").value = "";
-  document.getElementById("auth-overlay").classList.add("active");
-  document.getElementById("auth-key-input").focus();
 }
 
 function statusBadge(status) {
@@ -30,7 +25,6 @@ function formatTime(iso) {
 async function loadTasks() {
   try {
     var res = await fetch("/coze/scheduler/tasks", { headers: getHeaders() });
-    if (res.status === 401) { showAuthModal(); return; }
     var json = await res.json();
     var tasks = json.data || [];
     var recurring = tasks.filter(function(t) { return t.type === "recurring"; });
@@ -98,21 +92,6 @@ function renderExecLog() {
 
 // DOM 加载完成后绑定事件
 document.addEventListener("DOMContentLoaded", function() {
-  // 鉴权确认
-  document.getElementById("btn-auth-save").addEventListener("click", function() {
-    var key = document.getElementById("auth-key-input").value.trim();
-    if (!key) { alert("请输入 API Key"); return; }
-    apiKey = key;
-    localStorage.setItem("scheduler_api_key", key);
-    document.getElementById("auth-overlay").classList.remove("active");
-    loadTasks();
-  });
-
-  // 回车确认
-  document.getElementById("auth-key-input").addEventListener("keydown", function(e) {
-    if (e.key === "Enter") document.getElementById("btn-auth-save").click();
-  });
-
   // 添加循环任务弹窗
   document.getElementById("btn-add-recurring").addEventListener("click", function() {
     document.getElementById("modal-title").textContent = "添加循环任务";
@@ -178,7 +157,6 @@ document.addEventListener("DOMContentLoaded", function() {
         method: "POST", headers: getHeaders(),
         body: JSON.stringify({ platform: platform, limit: limit }),
       });
-      if (res.status === 401) { showAuthModal(); btn.disabled = false; btn.textContent = "立即执行"; return; }
       var json = await res.json();
       var data = json.data || {};
       logItem.status = data.code === 0 ? "success" : "failed";

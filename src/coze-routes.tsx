@@ -37,7 +37,7 @@ cozeApp.post("/workflow/run", async (c) => {
  * 调度配置页面（免鉴权，通过 PUBLIC_PATHS 放行）
  */
 cozeApp.get("/scheduler", (c) => {
-  return c.html(<CozeScheduler />);
+  return c.html(<CozeScheduler apiKey={config.API_KEY} />);
 });
 
 // ==================== 调度任务 CRUD API ====================
