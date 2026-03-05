@@ -95,12 +95,12 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           .form-row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; flex-wrap: wrap; }
           .form-group { display: flex; flex-direction: column; gap: 4px; }
           .form-group label { font-size: 12px; color: var(--muted); font-weight: 500; }
-          .form-group input, .form-group select {
+          .form-group input:not([type="checkbox"]), .form-group select {
             padding: 6px 10px; border: 1px solid var(--input-border);
             border-radius: 6px; font-size: 14px; background: var(--input-bg);
             color: var(--text); outline: none; min-width: 120px;
           }
-          .form-group input:focus, .form-group select:focus {
+          .form-group input:not([type="checkbox"]):focus, .form-group select:focus {
             border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
           }
           .empty { text-align: center; padding: 24px; color: var(--muted); font-size: 14px; }
@@ -122,7 +122,7 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           }
           .modal h3 { margin-bottom: 16px; font-size: 18px; }
           .modal .form-group { margin-bottom: 12px; }
-          .modal .form-group input, .modal .form-group select { width: 100%; }
+          .modal .form-group input:not([type="checkbox"]), .modal .form-group select { width: 100%; }
           .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
           .btn-cancel { background: var(--badge-idle); color: var(--text); }
           .platform-picker { border: 1px solid var(--input-border); border-radius: 6px; max-height: 240px; overflow-y: auto; padding: 8px; }
@@ -140,7 +140,6 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           .platform-item:hover { background: var(--hover-bg); }
           .platform-item input[type="checkbox"] { margin: 0; cursor: pointer; width: 14px; min-width: 14px; flex-shrink: 0; }
           .platform-item .p-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-          .platform-item .p-region { font-size: 11px; color: var(--muted); }
           .selected-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; min-height: 24px; }
           .selected-tag {
             display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px;

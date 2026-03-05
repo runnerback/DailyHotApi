@@ -41,8 +41,7 @@ function createPlatformPicker(prefix) {
     }).map(function(p) {
       return '<label class="platform-item" title="' + p.category + '">' +
         '<input type="checkbox" value="' + p.route + '"' + (selected.has(p.route) ? " checked" : "") + '>' +
-        '<span class="p-name">' + p.name + '</span>' +
-        '<span class="p-region">' + p.region + '</span>' +
+        '<span class="p-name">[' + p.region + '] ' + p.name + '</span>' +
         '</label>';
     }).join("");
   }
