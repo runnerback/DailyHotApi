@@ -10,6 +10,7 @@ import {
   updateTask,
   deleteTask,
   executeTask,
+  getExecLogs,
 } from "./utils/coze-scheduler.js";
 import CozeScheduler from "./views/CozeScheduler.js";
 
@@ -86,6 +87,17 @@ cozeApp.delete("/scheduler/tasks/:id", async (c) => {
   const id = c.req.param("id");
   await deleteTask(id);
   return c.json({ code: 200, message: "已删除" });
+});
+
+// ==================== 执行日志 ====================
+
+/**
+ * GET /coze/scheduler/logs
+ * 获取执行日志（循环 + 单次）
+ */
+cozeApp.get("/scheduler/logs", async (c) => {
+  const logs = await getExecLogs();
+  return c.json({ code: 200, data: logs });
 });
 
 // ==================== 单次立即执行 ====================

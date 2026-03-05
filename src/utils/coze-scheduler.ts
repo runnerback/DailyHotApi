@@ -23,9 +23,23 @@ export interface ScheduledTask {
   createdAt: string;
 }
 
+export interface ExecLog {
+  id: string;
+  type: "recurring" | "once";
+  taskId?: string;           // 循环任务关联 ID
+  platform: string;
+  limit: string;
+  status: "running" | "success" | "failed";
+  result?: { code: number; msg: string; randomToken: string };
+  startedAt: string;
+  finishedAt?: string;
+}
+
 // ==================== 常量 ====================
 
 const REDIS_KEY = "coze:scheduler:tasks";
+const EXEC_LOGS_KEY = "coze:scheduler:exec-logs";
+const MAX_EXEC_LOGS = 50;
 const WORKFLOW_TIMEOUT_MS = 15 * 60 * 1000; // 15 分钟
 const API_BASE_URL = "https://dailyhot.runfast.xyz";
 
@@ -51,6 +65,33 @@ async function loadTask(id: string): Promise<ScheduledTask | null> {
 async function removeTask(id: string): Promise<void> {
   await ensureRedisConnection();
   await redis.hdel(REDIS_KEY, id);
+}
+
+// ==================== 执行日志 Redis 存储 ====================
+
+async function pushExecLog(log: ExecLog): Promise<void> {
+  await ensureRedisConnection();
+  await redis.lpush(EXEC_LOGS_KEY, JSON.stringify(log));
+  await redis.ltrim(EXEC_LOGS_KEY, 0, MAX_EXEC_LOGS - 1);
+}
+
+async function updateExecLog(id: string, updates: Partial<ExecLog>): Promise<void> {
+  await ensureRedisConnection();
+  const all = await redis.lrange(EXEC_LOGS_KEY, 0, -1);
+  for (let i = 0; i < all.length; i++) {
+    const log = JSON.parse(all[i]) as ExecLog;
+    if (log.id === id) {
+      Object.assign(log, updates);
+      await redis.lset(EXEC_LOGS_KEY, i, JSON.stringify(log));
+      return;
+    }
+  }
+}
+
+export async function getExecLogs(limit = 20): Promise<ExecLog[]> {
+  await ensureRedisConnection();
+  const raw = await redis.lrange(EXEC_LOGS_KEY, 0, limit - 1);
+  return raw.map((r) => JSON.parse(r) as ExecLog);
 }
 
 // ==================== 任务 CRUD ====================
@@ -138,9 +179,22 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
   const randomToken = crypto.randomUUID();
   const platform = taskOrInput.platform;
   const limit = taskOrInput.limit || "1";
+  const isStoredTask = "id" in taskOrInput;
+
+  // 写入执行日志（running 状态）
+  const logId = crypto.randomUUID();
+  const execLog: ExecLog = {
+    id: logId,
+    type: isStoredTask ? taskOrInput.type : "once",
+    taskId: isStoredTask ? taskOrInput.id : undefined,
+    platform,
+    limit,
+    status: "running",
+    startedAt: new Date().toISOString(),
+  };
+  await pushExecLog(execLog);
 
   // 如果是保存的任务，更新状态
-  const isStoredTask = "id" in taskOrInput;
   if (isStoredTask) {
     taskOrInput.status = "running";
     await saveTask(taskOrInput);
@@ -172,6 +226,13 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
       await saveTask(taskOrInput);
     }
 
+    // 更新执行日志
+    await updateExecLog(logId, {
+      status: taskResult.code === 0 ? "success" : "failed",
+      result: taskResult,
+      finishedAt: new Date().toISOString(),
+    });
+
     logger.info(`✅ [SCHEDULER] 任务完成: platform=${platform}, code=${taskResult.code}, randomToken=${randomToken}`);
     return taskResult;
   } catch (err) {
@@ -184,6 +245,13 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
       taskOrInput.lastResult = taskResult;
       await saveTask(taskOrInput);
     }
+
+    // 更新执行日志
+    await updateExecLog(logId, {
+      status: "failed",
+      result: taskResult,
+      finishedAt: new Date().toISOString(),
+    });
 
     logger.error(`❌ [SCHEDULER] 任务失败: platform=${platform}, error=${errMsg}, randomToken=${randomToken}`);
     return taskResult;

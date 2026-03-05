@@ -21,7 +21,8 @@ function formatTime(iso) {
   return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-// 加载循环任务
+// ==================== 循环任务 ====================
+
 async function loadTasks() {
   try {
     var res = await fetch("/coze/scheduler/tasks", { headers: getHeaders() });
@@ -57,7 +58,6 @@ async function loadTasks() {
   }
 }
 
-// 切换开关
 async function toggleTask(id, enabled) {
   await fetch("/coze/scheduler/tasks/" + id, {
     method: "PATCH", headers: getHeaders(),
@@ -65,7 +65,6 @@ async function toggleTask(id, enabled) {
   });
 }
 
-// 删除任务
 async function deleteTask(id) {
   if (!confirm("确定要删除此任务？")) return;
   await fetch("/coze/scheduler/tasks/" + id, {
@@ -74,24 +73,53 @@ async function deleteTask(id) {
   loadTasks();
 }
 
-// 单次执行记录
-var execLogs = [];
+// ==================== 执行日志 ====================
 
-function renderExecLog() {
+function renderExecLog(logs) {
   var el = document.getElementById("exec-log");
-  el.innerHTML = execLogs.slice(0, 10).map(function(l) {
+  if (!logs || logs.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = logs.slice(0, 20).map(function(l) {
+    var resultText = l.result
+      ? "code=" + l.result.code + " " + (l.result.msg || "").substring(0, 30)
+      : "执行中...";
+    var tokenHtml = l.result && l.result.randomToken
+      ? '<span class="result-text" title="' + l.result.randomToken + '">token:' + l.result.randomToken.substring(0, 8) + '...</span>'
+      : '';
     return '<div class="exec-log-item">' +
-      '<span class="time-text">' + l.time + '</span>' +
+      '<span class="time-text">' + formatTime(l.startedAt) + '</span>' +
       '<span>' + l.platform + '</span>' +
+      '<span class="badge badge-' + (l.type === "recurring" ? "idle" : "success") + '" style="font-size:11px">' + (l.type === "recurring" ? "循环" : "单次") + '</span>' +
       statusBadge(l.status) +
-      '<span class="result-text">' + (l.msg || "执行中...") + '</span>' +
-      (l.randomToken ? '<span class="result-text" title="' + l.randomToken + '">token:' + l.randomToken.substring(0, 8) + '...</span>' : '') +
+      '<span class="result-text">' + resultText + '</span>' +
+      tokenHtml +
     '</div>';
   }).join("");
 }
 
-// DOM 加载完成后绑定事件
+async function loadExecLogs() {
+  try {
+    var res = await fetch("/coze/scheduler/logs", { headers: getHeaders() });
+    var json = await res.json();
+    var logs = json.data || [];
+    localStorage.setItem("scheduler_exec_logs", JSON.stringify(logs));
+    renderExecLog(logs);
+  } catch (e) {
+    // 静默失败，保留 localStorage 缓存的显示
+  }
+}
+
+// ==================== DOM 事件绑定 ====================
+
 document.addEventListener("DOMContentLoaded", function() {
+  // 先从 localStorage 缓存显示日志（避免白屏）
+  var cached = localStorage.getItem("scheduler_exec_logs");
+  if (cached) {
+    try { renderExecLog(JSON.parse(cached)); } catch (e) { /* ignore */ }
+  }
+
   // 添加循环任务弹窗
   document.getElementById("btn-add-recurring").addEventListener("click", function() {
     document.getElementById("modal-title").textContent = "添加循环任务";
@@ -145,31 +173,18 @@ document.addEventListener("DOMContentLoaded", function() {
     btn.disabled = true;
     btn.textContent = "执行中...";
 
-    var logItem = {
-      time: new Date().toLocaleString("zh-CN"),
-      platform: platform, status: "running", msg: "",
-    };
-    execLogs.unshift(logItem);
-    renderExecLog();
-
     try {
-      var res = await fetch("/coze/scheduler/execute", {
+      await fetch("/coze/scheduler/execute", {
         method: "POST", headers: getHeaders(),
         body: JSON.stringify({ platform: platform, limit: limit }),
       });
-      var json = await res.json();
-      var data = json.data || {};
-      logItem.status = data.code === 0 ? "success" : "failed";
-      logItem.msg = "code=" + data.code + " " + (data.msg || "");
-      logItem.randomToken = data.randomToken;
     } catch (e) {
-      logItem.status = "failed";
-      logItem.msg = e.message;
+      // 静默，日志从服务端刷新
     }
 
     btn.disabled = false;
     btn.textContent = "立即执行";
-    renderExecLog();
+    loadExecLogs();
   });
 
   // 点击遮罩关闭弹窗
@@ -181,5 +196,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // 初始加载 + 定时刷新
   loadTasks();
-  setInterval(loadTasks, 10000);
+  loadExecLogs();
+  setInterval(function() { loadTasks(); loadExecLogs(); }, 10000);
 });

@@ -150,9 +150,9 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           </table>
         </div>
 
-        {/* 单次任务 */}
+        {/* 单次执行 */}
         <div className="section">
-          <div className="section-title">单次任务</div>
+          <div className="section-title">单次执行</div>
           <div className="form-row">
             <div className="form-group">
               <label>Platform *</label>
@@ -164,6 +164,11 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
             </div>
             <button className="btn btn-success" id="btn-execute-once">立即执行</button>
           </div>
+        </div>
+
+        {/* 执行日志 */}
+        <div className="section">
+          <div className="section-title">执行日志</div>
           <div className="exec-log" id="exec-log"></div>
         </div>
 
