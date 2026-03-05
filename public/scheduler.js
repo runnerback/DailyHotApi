@@ -302,21 +302,11 @@ document.addEventListener("DOMContentLoaded", function() {
     if (selectedPlatforms.length === 0) { alert("请至少选择一个平台"); return; }
     var limit = document.getElementById("once-limit").value || "1";
 
-    var btn = document.getElementById("btn-execute-once");
-    btn.disabled = true;
-    btn.textContent = "执行中...";
-
-    try {
-      await fetch("/coze/scheduler/execute", {
-        method: "POST", headers: getHeaders(),
-        body: JSON.stringify({ platform: selectedPlatforms.join(","), limit: limit }),
-      });
-    } catch (e) {
-      // 静默，日志从服务端刷新
-    }
-
-    btn.disabled = false;
-    btn.textContent = "立即执行";
+    // 不阻塞，立即可触发下一次
+    fetch("/coze/scheduler/execute", {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({ platform: selectedPlatforms.join(","), limit: limit }),
+    }).catch(function() {});
     loadExecLogs();
   });
 
