@@ -121,9 +121,10 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           .exec-log-item .has-tip .tip {
             display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
             background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
-            padding: 6px 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all;
-            max-width: 400px; min-width: 120px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            color: var(--text); line-height: 1.5;
+            padding: 8px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-all;
+            max-width: 600px; min-width: 200px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            color: var(--text); line-height: 1.5; user-select: text; cursor: text;
+            pointer-events: auto;
           }
           .exec-log-item .has-tip:hover .tip { display: block; }
           .modal-overlay {
