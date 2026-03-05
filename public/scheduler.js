@@ -12,6 +12,12 @@ function getHeaders() {
   return h;
 }
 
+function esc(s) {
+  var el = document.createElement("span");
+  el.textContent = s || "";
+  return el.innerHTML;
+}
+
 function statusBadge(status) {
   var map = { idle: "空闲", running: "运行中", success: "成功", failed: "失败" };
   return '<span class="badge badge-' + status + '">' + (map[status] || status) + '</span>';
@@ -178,19 +184,21 @@ function renderExecLog(logs) {
       var p = PLATFORMS.find(function(x) { return x.route === route; });
       return p ? p.name : route;
     }).join(", ");
-    var resultText = l.result
-      ? "code=" + l.result.code + " " + (l.result.msg || "").substring(0, 30)
+    var resultFull = l.result
+      ? "code=" + l.result.code + "\n" + (l.result.msg || "")
       : "执行中...";
-    var tokenHtml = l.result && l.result.randomToken
-      ? '<span class="result-text" title="' + l.result.randomToken + '">token:' + l.result.randomToken.substring(0, 8) + '...</span>'
-      : '';
+    var resultShort = l.result
+      ? "code=" + l.result.code + " " + (l.result.msg || "").substring(0, 20)
+      : "执行中...";
+    var tokenFull = l.result && l.result.randomToken ? l.result.randomToken : "";
+    var tokenShort = tokenFull ? "token:" + tokenFull.substring(0, 8) + "..." : "";
     return '<div class="exec-log-item">' +
       '<span class="time-text">' + formatTime(l.startedAt) + '</span>' +
-      '<span title="' + l.platform + '">' + platformDisplay + '</span>' +
+      '<span class="has-tip"><span class="truncate">' + platformDisplay + '</span><span class="tip">' + esc(l.platform) + '</span></span>' +
       '<span class="badge badge-' + (l.type === "recurring" ? "idle" : "success") + '" style="font-size:11px">' + (l.type === "recurring" ? "循环" : "单次") + '</span>' +
       statusBadge(l.status) +
-      '<span class="result-text">' + resultText + '</span>' +
-      tokenHtml +
+      '<span class="has-tip"><span class="truncate">' + resultShort + '</span><span class="tip">' + esc(resultFull) + '</span></span>' +
+      (tokenFull ? '<span class="has-tip"><span class="truncate">' + tokenShort + '</span><span class="tip">' + esc(tokenFull) + '</span></span>' : '') +
     '</div>';
   }).join("");
 }

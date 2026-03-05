@@ -111,6 +111,21 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
             padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
             margin-bottom: 8px; font-size: 13px; display: flex; gap: 12px; align-items: center;
           }
+          .exec-log-item .has-tip {
+            position: relative; cursor: default; display: inline-block; max-width: 200px;
+          }
+          .exec-log-item .has-tip .truncate {
+            display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-size: 12px; color: var(--muted);
+          }
+          .exec-log-item .has-tip .tip {
+            display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+            padding: 6px 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all;
+            max-width: 400px; min-width: 120px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            color: var(--text); line-height: 1.5;
+          }
+          .exec-log-item .has-tip:hover .tip { display: block; }
           .modal-overlay {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
             z-index: 100; align-items: center; justify-content: center;
