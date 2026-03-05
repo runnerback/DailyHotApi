@@ -132,13 +132,13 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
             border-radius: 4px; font-size: 13px; background: var(--input-bg); color: var(--text); outline: none;
           }
           .platform-picker .picker-toolbar a { font-size: 12px; color: var(--primary); cursor: pointer; white-space: nowrap; }
-          .platform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px; }
+          .platform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px; }
           .platform-item {
             display: flex; align-items: center; gap: 6px; padding: 4px 6px;
             border-radius: 4px; cursor: pointer; font-size: 13px; user-select: none;
           }
           .platform-item:hover { background: var(--hover-bg); }
-          .platform-item input { margin: 0; cursor: pointer; }
+          .platform-item input[type="checkbox"] { margin: 0; cursor: pointer; width: 14px; min-width: 14px; flex-shrink: 0; }
           .platform-item .p-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .platform-item .p-region { font-size: 11px; color: var(--muted); }
           .selected-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; min-height: 24px; }
