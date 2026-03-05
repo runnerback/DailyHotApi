@@ -1,6 +1,13 @@
 import type { FC } from "hono/jsx";
+import { platforms } from "../data/platforms.js";
 
 const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
+  const platformsJson = JSON.stringify(platforms.map((p) => ({
+    route: p.route.slice(1), // 去掉开头的 /
+    name: p.name,
+    region: p.region,
+    category: p.category,
+  })));
   return (
     <html lang="zh-CN">
       <head>
@@ -118,6 +125,29 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           .modal .form-group input, .modal .form-group select { width: 100%; }
           .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
           .btn-cancel { background: var(--badge-idle); color: var(--text); }
+          .platform-picker { border: 1px solid var(--input-border); border-radius: 6px; max-height: 240px; overflow-y: auto; padding: 8px; }
+          .platform-picker .picker-toolbar { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+          .platform-picker .picker-toolbar input {
+            flex: 1; padding: 4px 8px; border: 1px solid var(--input-border);
+            border-radius: 4px; font-size: 13px; background: var(--input-bg); color: var(--text); outline: none;
+          }
+          .platform-picker .picker-toolbar a { font-size: 12px; color: var(--primary); cursor: pointer; white-space: nowrap; }
+          .platform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px; }
+          .platform-item {
+            display: flex; align-items: center; gap: 6px; padding: 4px 6px;
+            border-radius: 4px; cursor: pointer; font-size: 13px; user-select: none;
+          }
+          .platform-item:hover { background: var(--hover-bg); }
+          .platform-item input { margin: 0; cursor: pointer; }
+          .platform-item .p-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .platform-item .p-region { font-size: 11px; color: var(--muted); }
+          .selected-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; min-height: 24px; }
+          .selected-tag {
+            display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px;
+            background: var(--badge-success); color: var(--success); border-radius: 10px; font-size: 12px;
+          }
+          .selected-tag .remove { cursor: pointer; font-size: 14px; line-height: 1; }
+          .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
         `}</style>
       </head>
       <body>
@@ -153,14 +183,23 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
         {/* 单次执行 */}
         <div className="section">
           <div className="section-title">单次执行</div>
-          <div className="form-row">
-            <div className="form-group">
-              <label>Platform *</label>
-              <input type="text" id="once-platform" placeholder="douyin,sina,baidu" />
+          <div className="form-group" style="margin-bottom:12px">
+            <label>选择平台 *</label>
+            <div className="platform-picker" id="once-picker">
+              <div className="picker-toolbar">
+                <input type="text" placeholder="搜索平台..." id="once-search" />
+                <a id="once-select-all">全选</a>
+                <a id="once-clear-all">清空</a>
+              </div>
+              <div className="platform-grid" id="once-grid"></div>
             </div>
+            <div className="selected-tags" id="once-selected-tags"></div>
+          </div>
+          <div className="form-row">
             <div className="form-group">
               <label>Limit</label>
               <input type="number" id="once-limit" value="1" min="1" max="100" style="width:80px" />
+              <span className="hint">每个平台抓取的信息条数</span>
             </div>
             <button className="btn btn-success" id="btn-execute-once">立即执行</button>
           </div>
@@ -177,12 +216,21 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           <div className="modal">
             <h3 id="modal-title">添加循环任务</h3>
             <div className="form-group">
-              <label>Platform *（逗号分隔，如 douyin,sina,baidu）</label>
-              <input type="text" id="modal-platform" placeholder="douyin,sina,baidu" />
+              <label>选择平台 *</label>
+              <div className="platform-picker" id="modal-picker">
+                <div className="picker-toolbar">
+                  <input type="text" placeholder="搜索平台..." id="modal-search" />
+                  <a id="modal-select-all">全选</a>
+                  <a id="modal-clear-all">清空</a>
+                </div>
+                <div className="platform-grid" id="modal-grid"></div>
+              </div>
+              <div className="selected-tags" id="modal-selected-tags"></div>
             </div>
             <div className="form-group">
               <label>Limit（1-100）</label>
               <input type="number" id="modal-limit" value="1" min="1" max="100" />
+              <span className="hint">每个平台抓取的信息条数</span>
             </div>
             <div className="form-group">
               <label>执行间隔（小时）</label>
@@ -205,7 +253,7 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           </div>
         </div>
 
-        <script src="/scheduler.js" data-api-key={apiKey || ""}></script>
+        <script src="/scheduler.js" data-api-key={apiKey || ""} data-platforms={platformsJson}></script>
       </body>
     </html>
   );

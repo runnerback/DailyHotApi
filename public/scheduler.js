@@ -1,8 +1,10 @@
 // Coze 工作流调度配置页面脚本
 
-// API Key：从 script 标签的 data-api-key 属性读取（服务端注入）
+// 从 script 标签读取配置（服务端注入）
 var scriptTag = document.currentScript || document.querySelector('script[data-api-key]');
 var apiKey = scriptTag ? scriptTag.getAttribute("data-api-key") : "";
+var PLATFORMS = [];
+try { PLATFORMS = JSON.parse(scriptTag.getAttribute("data-platforms") || "[]"); } catch (e) { /* ignore */ }
 
 function getHeaders() {
   var h = { "Content-Type": "application/json" };
@@ -21,6 +23,91 @@ function formatTime(iso) {
   return d.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// ==================== 平台选择器 ====================
+
+function createPlatformPicker(prefix) {
+  var selected = new Set();
+  var gridEl = document.getElementById(prefix + "-grid");
+  var tagsEl = document.getElementById(prefix + "-selected-tags");
+  var searchEl = document.getElementById(prefix + "-search");
+
+  function render(filter) {
+    var keyword = (filter || "").toLowerCase();
+    gridEl.innerHTML = PLATFORMS.filter(function(p) {
+      if (!keyword) return true;
+      return p.name.toLowerCase().indexOf(keyword) >= 0 ||
+        p.route.toLowerCase().indexOf(keyword) >= 0 ||
+        p.category.toLowerCase().indexOf(keyword) >= 0;
+    }).map(function(p) {
+      return '<label class="platform-item" title="' + p.category + '">' +
+        '<input type="checkbox" value="' + p.route + '"' + (selected.has(p.route) ? " checked" : "") + '>' +
+        '<span class="p-name">' + p.name + '</span>' +
+        '<span class="p-region">' + p.region + '</span>' +
+        '</label>';
+    }).join("");
+  }
+
+  function renderTags() {
+    if (selected.size === 0) { tagsEl.innerHTML = ""; return; }
+    tagsEl.innerHTML = Array.from(selected).map(function(route) {
+      var p = PLATFORMS.find(function(x) { return x.route === route; });
+      var name = p ? p.name : route;
+      return '<span class="selected-tag">' + name +
+        '<span class="remove" data-route="' + route + '">&times;</span></span>';
+    }).join("");
+  }
+
+  // 复选框变化
+  gridEl.addEventListener("change", function(e) {
+    if (e.target.type !== "checkbox") return;
+    if (e.target.checked) selected.add(e.target.value);
+    else selected.delete(e.target.value);
+    renderTags();
+  });
+
+  // 标签删除
+  tagsEl.addEventListener("click", function(e) {
+    var route = e.target.getAttribute("data-route");
+    if (!route) return;
+    selected.delete(route);
+    render(searchEl.value);
+    renderTags();
+  });
+
+  // 搜索
+  searchEl.addEventListener("input", function() { render(searchEl.value); });
+
+  // 全选/清空
+  document.getElementById(prefix + "-select-all").addEventListener("click", function() {
+    PLATFORMS.forEach(function(p) { selected.add(p.route); });
+    render(searchEl.value);
+    renderTags();
+  });
+  document.getElementById(prefix + "-clear-all").addEventListener("click", function() {
+    selected.clear();
+    render(searchEl.value);
+    renderTags();
+  });
+
+  render();
+
+  return {
+    getSelected: function() { return Array.from(selected); },
+    setSelected: function(routes) {
+      selected.clear();
+      routes.forEach(function(r) { selected.add(r); });
+      render(searchEl.value);
+      renderTags();
+    },
+    clear: function() {
+      selected.clear();
+      searchEl.value = "";
+      render();
+      renderTags();
+    }
+  };
+}
+
 // ==================== 循环任务 ====================
 
 async function loadTasks() {
@@ -37,11 +124,16 @@ async function loadTasks() {
     }
 
     tbody.innerHTML = recurring.map(function(t) {
+      // platform 路由名转中文显示
+      var platformDisplay = t.platform.split(",").map(function(route) {
+        var p = PLATFORMS.find(function(x) { return x.route === route; });
+        return p ? p.name : route;
+      }).join(", ");
       var resultText = t.lastResult
         ? "code=" + t.lastResult.code + " " + (t.lastResult.msg || "").substring(0, 30)
         : "-";
       return '<tr data-id="' + t.id + '">' +
-        '<td>' + t.platform + '</td>' +
+        '<td title="' + t.platform + '">' + platformDisplay + '</td>' +
         '<td>' + t.limit + '</td>' +
         '<td>' + t.intervalHours + '</td>' +
         '<td>' + statusBadge(t.status) + '</td>' +
@@ -82,6 +174,11 @@ function renderExecLog(logs) {
     return;
   }
   el.innerHTML = logs.slice(0, 20).map(function(l) {
+    // platform 路由名转中文
+    var platformDisplay = l.platform.split(",").map(function(route) {
+      var p = PLATFORMS.find(function(x) { return x.route === route; });
+      return p ? p.name : route;
+    }).join(", ");
     var resultText = l.result
       ? "code=" + l.result.code + " " + (l.result.msg || "").substring(0, 30)
       : "执行中...";
@@ -90,7 +187,7 @@ function renderExecLog(logs) {
       : '';
     return '<div class="exec-log-item">' +
       '<span class="time-text">' + formatTime(l.startedAt) + '</span>' +
-      '<span>' + l.platform + '</span>' +
+      '<span title="' + l.platform + '">' + platformDisplay + '</span>' +
       '<span class="badge badge-' + (l.type === "recurring" ? "idle" : "success") + '" style="font-size:11px">' + (l.type === "recurring" ? "循环" : "单次") + '</span>' +
       statusBadge(l.status) +
       '<span class="result-text">' + resultText + '</span>' +
@@ -114,7 +211,11 @@ async function loadExecLogs() {
 // ==================== DOM 事件绑定 ====================
 
 document.addEventListener("DOMContentLoaded", function() {
-  // 先从 localStorage 缓存显示日志（避免白屏）
+  // 初始化平台选择器
+  var oncePicker = createPlatformPicker("once");
+  var modalPicker = createPlatformPicker("modal");
+
+  // 先从 localStorage 缓存显示日志
   var cached = localStorage.getItem("scheduler_exec_logs");
   if (cached) {
     try { renderExecLog(JSON.parse(cached)); } catch (e) { /* ignore */ }
@@ -123,7 +224,7 @@ document.addEventListener("DOMContentLoaded", function() {
   // 添加循环任务弹窗
   document.getElementById("btn-add-recurring").addEventListener("click", function() {
     document.getElementById("modal-title").textContent = "添加循环任务";
-    document.getElementById("modal-platform").value = "";
+    modalPicker.clear();
     document.getElementById("modal-limit").value = "1";
     document.getElementById("modal-interval").value = "1";
     document.getElementById("modal-task-id").value = "";
@@ -137,12 +238,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // 保存任务
   document.getElementById("btn-modal-save").addEventListener("click", async function() {
-    var platform = document.getElementById("modal-platform").value.trim();
-    if (!platform) { alert("Platform 不能为空"); return; }
+    var selectedPlatforms = modalPicker.getSelected();
+    if (selectedPlatforms.length === 0) { alert("请至少选择一个平台"); return; }
 
     var payload = {
       type: "recurring",
-      platform: platform,
+      platform: selectedPlatforms.join(","),
       limit: document.getElementById("modal-limit").value || "1",
       intervalHours: parseInt(document.getElementById("modal-interval").value),
       enabled: true,
@@ -165,8 +266,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
   // 立即执行
   document.getElementById("btn-execute-once").addEventListener("click", async function() {
-    var platform = document.getElementById("once-platform").value.trim();
-    if (!platform) { alert("Platform 不能为空"); return; }
+    var selectedPlatforms = oncePicker.getSelected();
+    if (selectedPlatforms.length === 0) { alert("请至少选择一个平台"); return; }
     var limit = document.getElementById("once-limit").value || "1";
 
     var btn = document.getElementById("btn-execute-once");
@@ -176,7 +277,7 @@ document.addEventListener("DOMContentLoaded", function() {
     try {
       await fetch("/coze/scheduler/execute", {
         method: "POST", headers: getHeaders(),
-        body: JSON.stringify({ platform: platform, limit: limit }),
+        body: JSON.stringify({ platform: selectedPlatforms.join(","), limit: limit }),
       });
     } catch (e) {
       // 静默，日志从服务端刷新
