@@ -1,6 +1,31 @@
 # DailyHotApi 部署文档
 
-> 版本: v1.6 | 更新时间: 2026-03-04
+> 版本: v1.7 | 更新时间: 2026-03-05
+
+---
+
+## ⚠️ 重要警告：ECS 部署路径必须是 `/var/www/dailyhot-api`
+
+> **2026-03-05 事故记录**：rsync 目标路径写成了 `/var/www/DailyHotApi`（大小写错误），
+> 而 PM2 工作目录是 `/var/www/dailyhot-api`，导致部署的新文件未被 PM2 进程加载，
+> 公网页面仍显示旧版本。
+
+### 正确路径
+
+```
+/var/www/dailyhot-api/    ← PM2 工作目录，rsync 目标必须是这个
+/var/www/DailyHotApi/     ← ❌ 错误！大小写不匹配
+```
+
+### 排查方法
+
+```bash
+# 确认 PM2 实际工作目录
+pm2 show daily-hot | grep 'exec cwd'
+# → exec cwd: /var/www/dailyhot-api
+
+# rsync 目标路径必须与上述输出一致
+```
 
 ---
 
