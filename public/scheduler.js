@@ -139,8 +139,8 @@ async function loadTasks() {
         : "-";
       // 开关按钮
       var toggleBtn = t.enabled
-        ? '<button class="btn btn-on btn-sm" onclick="toggleTask(\'' + t.id + '\', false)">开启</button>'
-        : '<button class="btn btn-off btn-sm" onclick="toggleTask(\'' + t.id + '\', true)">关闭</button>';
+        ? '<button class="btn btn-on btn-sm" onclick="toggleTask(\'' + t.id + '\', false)" title="点击关闭">\u25CF</button>'
+        : '<button class="btn btn-off btn-sm" onclick="toggleTask(\'' + t.id + '\', true)" title="点击开启">\u25CB</button>';
       return '<tr data-id="' + t.id + '">' +
         '<td title="' + t.platform + '">' + platformDisplay + '</td>' +
         '<td>' + t.limit + '</td>' +
@@ -220,16 +220,13 @@ async function loadExecLogs() {
   }
 }
 
-// ==================== 辅助：默认首次执行时间 ====================
+// ==================== 辅助：首次执行时间 ====================
 
-function getDefaultFirstRunTime() {
-  // 默认：当前时间往后 1 小时，取整到分钟
-  var d = new Date(Date.now() + 3600 * 1000);
-  d.setSeconds(0, 0);
-  // datetime-local 格式: YYYY-MM-DDTHH:mm
-  var pad = function(n) { return n < 10 ? "0" + n : "" + n; };
-  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-    "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+function buildFirstRunAt(hour, minute) {
+  // 用今天日期 + 用户输入的时:分
+  var d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
 }
 
 // ==================== DOM 事件绑定 ====================
@@ -251,7 +248,10 @@ document.addEventListener("DOMContentLoaded", function() {
     modalPicker.clear();
     document.getElementById("modal-limit").value = "1";
     document.getElementById("modal-interval").value = "1";
-    document.getElementById("modal-first-run").value = getDefaultFirstRunTime();
+    // 默认：当前时间往后 1 小时
+    var defTime = new Date(Date.now() + 3600 * 1000);
+    document.getElementById("modal-first-hour").value = defTime.getHours();
+    document.getElementById("modal-first-minute").value = defTime.getMinutes();
     document.getElementById("modal-task-id").value = "";
     document.getElementById("modal-overlay").classList.add("active");
   });
@@ -266,15 +266,18 @@ document.addEventListener("DOMContentLoaded", function() {
     var selectedPlatforms = modalPicker.getSelected();
     if (selectedPlatforms.length === 0) { alert("请至少选择一个平台"); return; }
 
-    var firstRunValue = document.getElementById("modal-first-run").value;
-    if (!firstRunValue) { alert("请设置首次执行时间"); return; }
+    var hour = parseInt(document.getElementById("modal-first-hour").value);
+    var minute = parseInt(document.getElementById("modal-first-minute").value);
+    if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      alert("请输入有效的首次执行时间（时 0-23，分 0-59）"); return;
+    }
 
     var payload = {
       type: "recurring",
       platform: selectedPlatforms.join(","),
       limit: document.getElementById("modal-limit").value || "1",
       intervalHours: parseFloat(document.getElementById("modal-interval").value) || 1,
-      firstRunAt: new Date(firstRunValue).toISOString(),
+      firstRunAt: buildFirstRunAt(hour, minute),
       enabled: true,
     };
 

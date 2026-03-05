@@ -175,7 +175,7 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
                 <th>状态</th>
                 <th>上次执行</th>
                 <th>结果</th>
-                <th>开关</th>
+                <th>状态</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -244,8 +244,12 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
             </div>
             <div className="form-group">
               <label>首次执行时间 *</label>
-              <input type="datetime-local" id="modal-first-run" />
-              <span className="hint">任务从此时间点开始，之后按间隔重复</span>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <input type="number" id="modal-first-hour" min="0" max="23" placeholder="时" style="width:60px;text-align:center;" />
+                <span style="font-size:16px;font-weight:600;">:</span>
+                <input type="number" id="modal-first-minute" min="0" max="59" placeholder="分" style="width:60px;text-align:center;" />
+              </div>
+              <span className="hint">今天的执行起始时间（如已过则立即执行），之后按间隔重复</span>
             </div>
             <input type="hidden" id="modal-task-id" />
             <div className="modal-actions">
