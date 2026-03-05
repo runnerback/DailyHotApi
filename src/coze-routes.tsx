@@ -64,6 +64,7 @@ cozeApp.post("/scheduler/tasks", async (c) => {
     limit?: string;
     intervalHours?: number;
     enabled?: boolean;
+    firstRunAt?: string;
   });
   return c.json({ code: 200, data: task });
 });

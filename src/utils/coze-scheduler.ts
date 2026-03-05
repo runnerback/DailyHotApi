@@ -1,8 +1,7 @@
 // Coze 工作流定时调度服务
-// 任务存储于 Redis，使用 node-cron 定时执行
+// 任务存储于 Redis，使用 setTimeout/setInterval 定时执行
 
 import crypto from "crypto";
-import cron, { type ScheduledTask as CronTask } from "node-cron";
 import { config } from "../config.js";
 import { runWorkflow } from "./coze.js";
 import { redis, ensureRedisConnection } from "./cache.js";
@@ -15,9 +14,10 @@ export interface ScheduledTask {
   type: "recurring" | "once";
   platform: string;          // 必填，逗号分隔
   limit: string;             // 默认 "1"
-  intervalHours: number;     // 循环任务：每 X 小时执行
+  intervalHours: number;     // 循环任务：每 X 小时执行（支持 0.1-24 小数）
   enabled: boolean;          // 循环任务：开关
   status: "idle" | "running" | "success" | "failed";
+  firstRunAt: string | null; // 首次执行时间（ISO）
   lastRunAt: string | null;
   lastResult: { code: number; msg: string; randomToken: string } | null;
   createdAt: string;
@@ -43,10 +43,10 @@ const MAX_EXEC_LOGS = 50;
 const WORKFLOW_TIMEOUT_MS = 15 * 60 * 1000; // 15 分钟
 const API_BASE_URL = "https://dailyhot.runfast.xyz";
 
-// ==================== Cron 管理 ====================
+// ==================== 定时任务管理 ====================
 
-// taskId → CronTask 映射
-const cronJobs = new Map<string, CronTask>();
+// taskId → 清理函数映射
+const scheduledJobs = new Map<string, { clear: () => void }>();
 
 // ==================== Redis 存储 ====================
 
@@ -108,6 +108,7 @@ export async function createTask(input: {
   limit?: string;
   intervalHours?: number;
   enabled?: boolean;
+  firstRunAt?: string;
 }): Promise<ScheduledTask> {
   const task: ScheduledTask = {
     id: crypto.randomUUID(),
@@ -117,6 +118,7 @@ export async function createTask(input: {
     intervalHours: input.intervalHours || 1,
     enabled: input.enabled ?? true,
     status: "idle",
+    firstRunAt: input.firstRunAt || null,
     lastRunAt: null,
     lastResult: null,
     createdAt: new Date().toISOString(),
@@ -125,9 +127,9 @@ export async function createTask(input: {
   await saveTask(task);
   logger.info(`📋 [SCHEDULER] 创建任务: ${task.id} (${task.type}, platform=${task.platform})`);
 
-  // 循环任务：注册 cron
+  // 循环任务：注册定时
   if (task.type === "recurring" && task.enabled && !isDevelopment()) {
-    registerCronJob(task);
+    registerScheduledJob(task);
   }
 
   return task;
@@ -135,26 +137,29 @@ export async function createTask(input: {
 
 export async function updateTask(
   id: string,
-  updates: Partial<Pick<ScheduledTask, "platform" | "limit" | "intervalHours" | "enabled">>,
+  updates: Partial<Pick<ScheduledTask, "platform" | "limit" | "intervalHours" | "enabled" | "firstRunAt">>,
 ): Promise<ScheduledTask> {
   const task = await loadTask(id);
   if (!task) throw new Error(`任务不存在: ${id}`);
 
   const oldEnabled = task.enabled;
   const oldInterval = task.intervalHours;
+  const oldFirstRunAt = task.firstRunAt;
 
   Object.assign(task, updates);
   await saveTask(task);
 
-  // 循环任务：更新 cron
+  // 循环任务：更新定时
   if (task.type === "recurring" && !isDevelopment()) {
-    const needReschedule = updates.intervalHours !== undefined && updates.intervalHours !== oldInterval;
+    const needReschedule =
+      (updates.intervalHours !== undefined && updates.intervalHours !== oldInterval) ||
+      (updates.firstRunAt !== undefined && updates.firstRunAt !== oldFirstRunAt);
     const needToggle = updates.enabled !== undefined && updates.enabled !== oldEnabled;
 
     if (needReschedule || needToggle) {
-      unregisterCronJob(id);
+      unregisterScheduledJob(id);
       if (task.enabled) {
-        registerCronJob(task);
+        registerScheduledJob(task);
       }
     }
   }
@@ -164,7 +169,7 @@ export async function updateTask(
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  unregisterCronJob(id);
+  unregisterScheduledJob(id);
   await removeTask(id);
   logger.info(`📋 [SCHEDULER] 删除任务: ${id}`);
 }
@@ -258,40 +263,65 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
   }
 }
 
-// ==================== Cron 调度 ====================
+// ==================== 定时调度 ====================
 
 function isDevelopment(): boolean {
   return process.env.NODE_ENV === "development";
 }
 
-function registerCronJob(task: ScheduledTask): void {
-  const expression = `0 */${task.intervalHours} * * *`;
-  if (!cron.validate(expression)) {
-    logger.error(`❌ [SCHEDULER] 无效的 cron 表达式: ${expression}`);
-    return;
-  }
+function registerScheduledJob(task: ScheduledTask): void {
+  const intervalMs = task.intervalHours * 3600 * 1000;
+  let timeoutRef: ReturnType<typeof setTimeout> | null = null;
+  let intervalRef: ReturnType<typeof setInterval> | null = null;
 
-  const job = cron.schedule(expression, async () => {
-    logger.info(`⏰ [SCHEDULER] cron 触发: ${task.id} (platform=${task.platform})`);
-    // 重新从 Redis 加载最新状态
+  const runTask = async () => {
+    logger.info(`⏰ [SCHEDULER] 定时触发: ${task.id} (platform=${task.platform})`);
     const latest = await loadTask(task.id);
     if (!latest || !latest.enabled) {
       logger.info(`⏭️ [SCHEDULER] 任务已禁用或不存在，跳过: ${task.id}`);
       return;
     }
     await executeTask(latest);
+  };
+
+  // 计算首次执行延迟
+  let delayMs: number;
+  if (task.lastRunAt) {
+    // 已执行过：下次 = lastRunAt + interval
+    const nextRun = new Date(task.lastRunAt).getTime() + intervalMs;
+    delayMs = nextRun - Date.now();
+    if (delayMs < 0) delayMs = 0;
+  } else if (task.firstRunAt) {
+    // 未执行过，有首次执行时间
+    delayMs = new Date(task.firstRunAt).getTime() - Date.now();
+    if (delayMs < 0) delayMs = 0;
+  } else {
+    // 无信息，等一个周期
+    delayMs = intervalMs;
+  }
+
+  timeoutRef = setTimeout(async () => {
+    await runTask();
+    intervalRef = setInterval(runTask, intervalMs);
+  }, delayMs);
+
+  scheduledJobs.set(task.id, {
+    clear: () => {
+      if (timeoutRef) clearTimeout(timeoutRef);
+      if (intervalRef) clearInterval(intervalRef);
+    },
   });
 
-  cronJobs.set(task.id, job);
-  logger.info(`⏰ [SCHEDULER] 注册 cron: ${task.id}, 表达式=${expression}`);
+  const nextRunAt = new Date(Date.now() + delayMs).toISOString();
+  logger.info(`⏰ [SCHEDULER] 注册定时: ${task.id}, 下次执行≈${nextRunAt}, 间隔=${task.intervalHours}h`);
 }
 
-function unregisterCronJob(id: string): void {
-  const job = cronJobs.get(id);
+function unregisterScheduledJob(id: string): void {
+  const job = scheduledJobs.get(id);
   if (job) {
-    job.stop();
-    cronJobs.delete(id);
-    logger.info(`⏰ [SCHEDULER] 注销 cron: ${id}`);
+    job.clear();
+    scheduledJobs.delete(id);
+    logger.info(`⏰ [SCHEDULER] 注销定时: ${id}`);
   }
 }
 
@@ -309,7 +339,7 @@ export async function startScheduler(): Promise<void> {
 
   for (const task of tasks) {
     if (task.type === "recurring" && task.enabled) {
-      registerCronJob(task);
+      registerScheduledJob(task);
       count++;
     }
   }
@@ -318,10 +348,10 @@ export async function startScheduler(): Promise<void> {
 }
 
 export function stopScheduler(): void {
-  for (const [id, job] of cronJobs) {
-    job.stop();
-    logger.info(`⏰ [SCHEDULER] 停止 cron: ${id}`);
+  for (const [id, job] of scheduledJobs) {
+    job.clear();
+    logger.info(`⏰ [SCHEDULER] 停止定时: ${id}`);
   }
-  cronJobs.clear();
+  scheduledJobs.clear();
   logger.info("📋 [SCHEDULER] 调度器已停止");
 }

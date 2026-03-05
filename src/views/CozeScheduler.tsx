@@ -77,21 +77,10 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
           .btn-success:hover { opacity: 0.85; }
           .btn-sm { padding: 4px 10px; font-size: 12px; }
           .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-          .toggle {
-            position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer;
-          }
-          .toggle input { opacity: 0; width: 0; height: 0; }
-          .toggle .slider {
-            position: absolute; inset: 0; background: var(--badge-idle);
-            border-radius: 22px; transition: 0.2s;
-          }
-          .toggle .slider::before {
-            content: ""; position: absolute; height: 16px; width: 16px;
-            left: 3px; bottom: 3px; background: #fff;
-            border-radius: 50%; transition: 0.2s;
-          }
-          .toggle input:checked + .slider { background: var(--success); }
-          .toggle input:checked + .slider::before { transform: translateX(18px); }
+          .btn-on { background: var(--success); color: #fff; }
+          .btn-on:hover { opacity: 0.85; }
+          .btn-off { background: var(--badge-idle); color: var(--muted); }
+          .btn-off:hover { background: var(--hover-bg); }
           .form-row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; flex-wrap: wrap; }
           .form-group { display: flex; flex-direction: column; gap: 4px; }
           .form-group label { font-size: 12px; color: var(--muted); font-weight: 500; }
@@ -182,6 +171,7 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
                 <th>Platform</th>
                 <th>Limit</th>
                 <th>间隔(h)</th>
+                <th>首次执行</th>
                 <th>状态</th>
                 <th>上次执行</th>
                 <th>结果</th>
@@ -190,7 +180,7 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
               </tr>
             </thead>
             <tbody id="recurring-tbody">
-              <tr><td colSpan={8} className="empty">加载中...</td></tr>
+              <tr><td colSpan={9} className="empty">加载中...</td></tr>
             </tbody>
           </table>
         </div>
@@ -248,17 +238,14 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
               <span className="hint">每个平台抓取的信息条数</span>
             </div>
             <div className="form-group">
-              <label>执行间隔（小时）</label>
-              <select id="modal-interval">
-                <option value="1">每 1 小时</option>
-                <option value="2">每 2 小时</option>
-                <option value="3">每 3 小时</option>
-                <option value="4">每 4 小时</option>
-                <option value="6">每 6 小时</option>
-                <option value="8">每 8 小时</option>
-                <option value="12">每 12 小时</option>
-                <option value="24">每 24 小时</option>
-              </select>
+              <label>执行间隔（小时，0.1-24）</label>
+              <input type="number" id="modal-interval" value="1" min="0.1" max="24" step="0.1" />
+              <span className="hint">支持小数，如 0.5 = 30分钟</span>
+            </div>
+            <div className="form-group">
+              <label>首次执行时间 *</label>
+              <input type="datetime-local" id="modal-first-run" />
+              <span className="hint">任务从此时间点开始，之后按间隔重复</span>
             </div>
             <input type="hidden" id="modal-task-id" />
             <div className="modal-actions">

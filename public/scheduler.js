@@ -124,7 +124,7 @@ async function loadTasks() {
     var tbody = document.getElementById("recurring-tbody");
 
     if (recurring.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty">暂无循环任务</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">暂无循环任务</td></tr>';
       return;
     }
 
@@ -137,21 +137,25 @@ async function loadTasks() {
       var resultText = t.lastResult
         ? "code=" + t.lastResult.code + " " + (t.lastResult.msg || "").substring(0, 30)
         : "-";
+      // 开关按钮
+      var toggleBtn = t.enabled
+        ? '<button class="btn btn-on btn-sm" onclick="toggleTask(\'' + t.id + '\', false)">开启</button>'
+        : '<button class="btn btn-off btn-sm" onclick="toggleTask(\'' + t.id + '\', true)">关闭</button>';
       return '<tr data-id="' + t.id + '">' +
         '<td title="' + t.platform + '">' + platformDisplay + '</td>' +
         '<td>' + t.limit + '</td>' +
         '<td>' + t.intervalHours + '</td>' +
+        '<td class="time-text">' + formatTime(t.firstRunAt) + '</td>' +
         '<td>' + statusBadge(t.status) + '</td>' +
         '<td class="time-text">' + formatTime(t.lastRunAt) + '</td>' +
         '<td class="result-text" title="' + resultText + '">' + resultText + '</td>' +
-        '<td><label class="toggle"><input type="checkbox" ' + (t.enabled ? "checked" : "") +
-          ' onchange="toggleTask(\'' + t.id + '\', this.checked)"><span class="slider"></span></label></td>' +
+        '<td>' + toggleBtn + '</td>' +
         '<td><button class="btn btn-danger btn-sm" onclick="deleteTask(\'' + t.id + '\')">删除</button></td>' +
         '</tr>';
     }).join("");
   } catch (e) {
     document.getElementById("recurring-tbody").innerHTML =
-      '<tr><td colspan="8" class="empty">加载失败: ' + e.message + '</td></tr>';
+      '<tr><td colspan="9" class="empty">加载失败: ' + e.message + '</td></tr>';
   }
 }
 
@@ -160,6 +164,7 @@ async function toggleTask(id, enabled) {
     method: "PATCH", headers: getHeaders(),
     body: JSON.stringify({ enabled: enabled }),
   });
+  loadTasks();
 }
 
 async function deleteTask(id) {
@@ -215,6 +220,18 @@ async function loadExecLogs() {
   }
 }
 
+// ==================== 辅助：默认首次执行时间 ====================
+
+function getDefaultFirstRunTime() {
+  // 默认：当前时间往后 1 小时，取整到分钟
+  var d = new Date(Date.now() + 3600 * 1000);
+  d.setSeconds(0, 0);
+  // datetime-local 格式: YYYY-MM-DDTHH:mm
+  var pad = function(n) { return n < 10 ? "0" + n : "" + n; };
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+    "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
 // ==================== DOM 事件绑定 ====================
 
 document.addEventListener("DOMContentLoaded", function() {
@@ -234,6 +251,7 @@ document.addEventListener("DOMContentLoaded", function() {
     modalPicker.clear();
     document.getElementById("modal-limit").value = "1";
     document.getElementById("modal-interval").value = "1";
+    document.getElementById("modal-first-run").value = getDefaultFirstRunTime();
     document.getElementById("modal-task-id").value = "";
     document.getElementById("modal-overlay").classList.add("active");
   });
@@ -248,11 +266,15 @@ document.addEventListener("DOMContentLoaded", function() {
     var selectedPlatforms = modalPicker.getSelected();
     if (selectedPlatforms.length === 0) { alert("请至少选择一个平台"); return; }
 
+    var firstRunValue = document.getElementById("modal-first-run").value;
+    if (!firstRunValue) { alert("请设置首次执行时间"); return; }
+
     var payload = {
       type: "recurring",
       platform: selectedPlatforms.join(","),
       limit: document.getElementById("modal-limit").value || "1",
-      intervalHours: parseInt(document.getElementById("modal-interval").value),
+      intervalHours: parseFloat(document.getElementById("modal-interval").value) || 1,
+      firstRunAt: new Date(firstRunValue).toISOString(),
       enabled: true,
     };
 
