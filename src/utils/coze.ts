@@ -20,12 +20,12 @@ interface CozeWorkflowResponse {
 
 // ==================== 常量 ====================
 
-// Coze 实际 token 有效期约 1 小时（不论请求多长），强制 50 分钟内刷新
-const TOKEN_MAX_CACHE_MS = 50 * 60 * 1000;
-// 提前 5 分钟视为过期
-const SAFETY_MARGIN_MS = 5 * 60 * 1000;
-// access_token 请求的有效期（秒）
-const TOKEN_DURATION_SECONDS = 86400;
+// Coze 实际 token 有效期约 15 分钟（官方 SDK 默认 900s），强制 10 分钟内刷新
+const TOKEN_MAX_CACHE_MS = 10 * 60 * 1000;
+// 提前 2 分钟视为过期
+const SAFETY_MARGIN_MS = 2 * 60 * 1000;
+// access_token 请求的有效期（秒），与官方 SDK 默认值一致
+const TOKEN_DURATION_SECONDS = 900;
 
 // ==================== 私钥加载 ====================
 
