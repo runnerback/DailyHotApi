@@ -20,9 +20,11 @@ interface CozeWorkflowResponse {
 
 // ==================== 常量 ====================
 
-// 提前 5 分钟视为过期（JWT 换取的 access_token 有效期最大 24 小时）
+// Coze 实际 token 有效期约 1 小时（不论请求多长），强制 50 分钟内刷新
+const TOKEN_MAX_CACHE_MS = 50 * 60 * 1000;
+// 提前 5 分钟视为过期
 const SAFETY_MARGIN_MS = 5 * 60 * 1000;
-// access_token 请求的有效期（秒），最大 86400（24 小时）
+// access_token 请求的有效期（秒）
 const TOKEN_DURATION_SECONDS = 86400;
 
 // ==================== 私钥加载 ====================
@@ -106,10 +108,12 @@ export async function getValidAccessToken(): Promise<string> {
   fetchingPromise = (async () => {
     try {
       const { access_token, expires_in } = await fetchAccessToken();
+      const serverExpiresMs = expires_in * 1000 - SAFETY_MARGIN_MS;
       cachedToken = {
         access_token,
-        expires_at: Date.now() + expires_in * 1000 - SAFETY_MARGIN_MS,
+        expires_at: Date.now() + Math.min(serverExpiresMs, TOKEN_MAX_CACHE_MS),
       };
+      logger.info(`🔑 [COZE] token 缓存 ${Math.min(serverExpiresMs, TOKEN_MAX_CACHE_MS) / 60000} 分钟（服务端返回 ${expires_in}s）`);
       return access_token;
     } finally {
       fetchingPromise = null;
@@ -142,22 +146,38 @@ export async function runWorkflow(
   parameters: Record<string, unknown> = {},
   timeoutMs: number = 15 * 60 * 1000,
 ): Promise<CozeWorkflowResponse> {
-  const accessToken = await getValidAccessToken();
-
-  logger.info(`🚀 [COZE] 触发工作流: ${workflowId}`);
-  const response = await axios.post<CozeWorkflowResponse>(
-    "https://api.coze.cn/v1/workflow/run",
-    { workflow_id: workflowId, parameters },
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
+  const callAPI = async (token: string) => {
+    return axios.post<CozeWorkflowResponse>(
+      "https://api.coze.cn/v1/workflow/run",
+      { workflow_id: workflowId, parameters },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: timeoutMs,
+        proxy: false,
       },
-      timeout: timeoutMs,
-      proxy: false,
-    },
-  );
+    );
+  };
 
-  logger.info(`✅ [COZE] 工作流执行完成: code=${response.data.code}`);
-  return response.data;
+  let accessToken = await getValidAccessToken();
+  logger.info(`🚀 [COZE] 触发工作流: ${workflowId}`);
+
+  try {
+    const response = await callAPI(accessToken);
+    logger.info(`✅ [COZE] 工作流执行完成: code=${response.data.code}`);
+    return response.data;
+  } catch (err) {
+    // 401 表示 token 已失效（Coze 可能比预期更早过期），清除缓存重试一次
+    if (axios.isAxiosError(err) && err.response?.status === 401) {
+      logger.warn("⚠️ [COZE] 工作流调用 401，清除 token 缓存并重试...");
+      cachedToken = null;
+      accessToken = await getValidAccessToken();
+      const response = await callAPI(accessToken);
+      logger.info(`✅ [COZE] 工作流重试成功: code=${response.data.code}`);
+      return response.data;
+    }
+    throw err;
+  }
 }
