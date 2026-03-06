@@ -101,21 +101,22 @@ const CozeScheduler: FC<{ apiKey?: string }> = ({ apiKey }) => {
             margin-bottom: 8px; font-size: 13px; display: flex; gap: 12px; align-items: center;
           }
           .exec-log-item .has-tip {
-            position: relative; cursor: default; display: inline-block; max-width: 200px;
+            position: relative; cursor: pointer; display: inline-block; max-width: 200px;
           }
           .exec-log-item .has-tip .truncate {
             display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
             font-size: 12px; color: var(--muted);
           }
+          .exec-log-item .has-tip .truncate:hover { text-decoration: underline dotted; }
           .exec-log-item .has-tip .tip {
-            display: none; position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+            display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+            margin-bottom: 6px;
             background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
             padding: 8px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-all;
             max-width: 600px; min-width: 200px; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             color: var(--text); line-height: 1.5; user-select: text; cursor: text;
-            pointer-events: auto;
           }
-          .exec-log-item .has-tip:hover .tip { display: block; }
+          .exec-log-item .has-tip .tip.active { display: block; }
           .modal-overlay {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
             z-index: 100; align-items: center; justify-content: center;

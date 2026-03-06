@@ -229,11 +229,41 @@ function buildFirstRunAt(hour, minute) {
   return d.toISOString();
 }
 
+// ==================== Tooltip 点击切换 ====================
+
+function initTooltipClick() {
+  // 点击 .has-tip 显示/隐藏 tooltip
+  document.getElementById("exec-log").addEventListener("click", function(e) {
+    var hasTip = e.target.closest(".has-tip");
+    if (!hasTip) return;
+    var tip = hasTip.querySelector(".tip");
+    if (!tip) return;
+    // 如果点击的是 tooltip 内部文字（选择复制），不关闭
+    if (e.target.closest(".tip")) return;
+    // 关闭其他 tooltip
+    document.querySelectorAll(".exec-log-item .tip.active").forEach(function(el) {
+      if (el !== tip) el.classList.remove("active");
+    });
+    tip.classList.toggle("active");
+  });
+  // 点击外部关闭所有 tooltip
+  document.addEventListener("click", function(e) {
+    if (!e.target.closest(".has-tip")) {
+      document.querySelectorAll(".exec-log-item .tip.active").forEach(function(el) {
+        el.classList.remove("active");
+      });
+    }
+  });
+}
+
 // ==================== DOM 事件绑定 ====================
 
 document.addEventListener("DOMContentLoaded", function() {
   // 初始化平台选择器
   var oncePicker = createPlatformPicker("once");
+
+  // 初始化 tooltip 点击
+  initTooltipClick();
   var modalPicker = createPlatformPicker("modal");
 
   // 先从 localStorage 缓存显示日志
