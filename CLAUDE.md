@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> 版本: v1.7 | 更新时间: 2026-03-09
+> 版本: v1.8 | 更新时间: 2026-03-09
 
 本文件为 Claude Code 在此代码库工作时提供指导。
 
@@ -271,7 +271,7 @@ curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
 
 **工作流参数**：
 - 输入：`api`(string, 固定 dailyhot URL)、`limit`(string, 1-100)、`platform`(string, 逗号分隔, 必填)、`randomToken`(UUID, 自动生成)
-- 输出：`msg`(string)、`log_id`(string)、`code`(number)
+- 输出：`msg`(string)、`log_id`(string)、`code`(number)、`total`(number, 写入飞书记录数)
 - 超时：默认 15 分钟（`runWorkflow` 第三个参数可配置）
 
 **存储**：
@@ -299,6 +299,7 @@ curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
 - `json-body-js/normalize.js` — 响应归一化（提取 6 字段：platform、updateTime、title、desc、cover、url）
 - `json-body-js/flatten.js` — 循环结果合并（移除 data 层级，输出扁平数组）
 - `json-body-js/to-feishu-records.js` — 转换为飞书多维表格 add_records 格式
+- `json-body-js/count-feishu-records.js` — 统计成功写入飞书的记录数（放在写入飞书节点之后，输出 `total`）
 
 > 注意：Coze HTTP 节点返回的 body 是 JSON 字符串，代码中需 `JSON.parse` 处理。
 
