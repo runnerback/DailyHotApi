@@ -19,7 +19,7 @@ export interface ScheduledTask {
   status: "idle" | "running" | "success" | "failed";
   firstRunAt: string | null; // 首次执行时间（ISO）
   lastRunAt: string | null;
-  lastResult: { code: number; msg: string; randomToken: string } | null;
+  lastResult: { code: number; msg: string; randomToken: string; total?: number } | null;
   createdAt: string;
 }
 
@@ -30,7 +30,7 @@ export interface ExecLog {
   platform: string;
   limit: string;
   status: "running" | "success" | "failed";
-  result?: { code: number; msg: string; randomToken: string };
+  result?: { code: number; msg: string; randomToken: string; total?: number };
   startedAt: string;
   finishedAt?: string;
 }
@@ -180,6 +180,7 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
   code: number;
   msg: string;
   randomToken: string;
+  total?: number;
 }> {
   const randomToken = crypto.randomUUID();
   const platform = taskOrInput.platform;
@@ -215,14 +216,19 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
     );
 
     // result.data 是 JSON 字符串
-    let parsed: { code: number; msg: string; log_id?: string } = { code: result.code, msg: result.msg };
+    let parsed: { code: number; msg: string; log_id?: string; total?: number } = { code: result.code, msg: result.msg };
     try {
       parsed = JSON.parse(result.data);
     } catch {
       // data 不是 JSON，使用 result 顶层字段
     }
 
-    const taskResult = { code: parsed.code ?? result.code, msg: parsed.msg ?? result.msg, randomToken };
+    const taskResult = {
+      code: parsed.code ?? result.code,
+      msg: parsed.msg ?? result.msg,
+      randomToken,
+      total: parsed.total,
+    };
 
     if (isStoredTask) {
       taskOrInput.status = taskResult.code === 0 ? "success" : "failed";

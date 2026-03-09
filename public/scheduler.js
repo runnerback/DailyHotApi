@@ -197,11 +197,15 @@ function renderExecLog(logs) {
       : "执行中...";
     var tokenFull = l.result && l.result.randomToken ? l.result.randomToken : "";
     var tokenShort = tokenFull ? "token:" + tokenFull.substring(0, 8) + "..." : "";
+    var totalDisplay = l.result && l.result.total != null
+      ? '<span class="badge badge-success" style="font-size:11px" title="写入飞书 ' + l.result.total + ' 条">写入 ' + l.result.total + ' 条</span>'
+      : '';
     return '<div class="exec-log-item">' +
       '<span class="time-text">' + formatTime(l.startedAt) + '</span>' +
       '<span class="has-tip"><span class="truncate">' + platformDisplay + '</span><span class="tip">' + esc(l.platform) + '</span></span>' +
       '<span class="badge badge-' + (l.type === "recurring" ? "idle" : "success") + '" style="font-size:11px">' + (l.type === "recurring" ? "循环" : "单次") + '</span>' +
       statusBadge(l.status) +
+      totalDisplay +
       '<span class="has-tip"><span class="truncate">' + resultShort + '</span><span class="tip">' + esc(resultFull) + '</span></span>' +
       (tokenFull ? '<span class="has-tip"><span class="truncate">' + tokenShort + '</span><span class="tip">' + esc(tokenFull) + '</span></span>' : '') +
     '</div>';
