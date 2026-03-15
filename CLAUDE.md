@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> 版本: v1.8 | 更新时间: 2026-03-09
+> 版本: v1.9 | 更新时间: 2026-03-15
 
 本文件为 Claude Code 在此代码库工作时提供指导。
 
@@ -61,7 +61,8 @@ src/
 │   ├── auth.ts           # API Key 鉴权中间件
 │   ├── kuaidaili.ts      # 快代理（KuaiDaiLi）代理管理
 │   ├── coze.ts           # Coze JWT 鉴权 + 工作流 API 调用
-│   ├── coze-scheduler.ts # Coze 工作流定时调度服务（Redis 存储 + node-cron）
+│   ├── coze-scheduler.ts # Coze 工作流定时调度服务（Redis 存储 + setTimeout/setInterval）
+│   ├── feishu.ts         # 飞书多维表格 API（tenant_access_token + batch_create）
 │   └── getToken/         # 平台认证（Bilibili WBI、Weread、Coolapk）
 ├── coze-routes.tsx       # Coze 路由（工作流触发 + 调度任务 CRUD）
 ├── coze-JWT-auth-private-key/  # Coze 服务类应用私钥（.gitignore）
@@ -192,6 +193,10 @@ export const handleRoute = async (c: ListContext, noCache: boolean) => {
 | `COZE_PUBLIC_KEY_ID` | 空 | Coze JWT 公钥指纹 |
 | `COZE_SPACE_ID` | 空 | Coze 工作空间 ID |
 | `COZE_WORKFLOW_ID` | 空 | Coze 工作流 ID |
+| `FEISHU_APP_ID` | 空 | 飞书自建应用 APP ID |
+| `FEISHU_APP_SECRET` | 空 | 飞书自建应用 APP Secret |
+| `FEISHU_BITABLE_APP_TOKEN` | 空 | 飞书多维表格 app_token（注意：非 wiki_token） |
+| `FEISHU_BITABLE_TABLE_ID` | 空 | 飞书多维表格 table_id |
 
 ## API 鉴权
 
@@ -271,7 +276,7 @@ curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
 
 **工作流参数**：
 - 输入：`api`(string, 固定 dailyhot URL)、`limit`(string, 1-100)、`platform`(string, 逗号分隔, 必填)、`randomToken`(UUID, 自动生成)
-- 输出：`msg`(string)、`log_id`(string)、`code`(number)、`total`(number, 写入飞书记录数)
+- 输出：`output`(Array\<Object\>, to-feishu-records.js 的输出，由 Server 端写入飞书)、`randomToken`(string)
 - 超时：默认 15 分钟（`runWorkflow` 第三个参数可配置）
 
 **存储**：
@@ -298,10 +303,52 @@ curl -X POST https://dailyhot.runfast.xyz/coze/workflow/run \
 - `http-node-guide.md` — HTTP 请求节点配置指南
 - `json-body-js/normalize.js` — 响应归一化（提取 6 字段：platform、updateTime、title、desc、cover、url）
 - `json-body-js/flatten.js` — 循环结果合并（移除 data 层级，输出扁平数组）
-- `json-body-js/to-feishu-records.js` — 转换为飞书多维表格 add_records 格式
-- `json-body-js/count-feishu-records.js` — 统计成功写入飞书的记录数（放在写入飞书节点之后，输出 `total`）
+- `json-body-js/to-feishu-records.js` — 转换为飞书多维表格 `{fields}` 格式（Coze 最后一个处理节点）
+- `json-body-js/count-feishu-records.js` — 已弃用（统计功能已迁移至 Server 端 `feishu.ts`）
+- `feishu-bitable-api-reference.md` — 飞书多维表格 API 参考文档
 
 > 注意：Coze HTTP 节点返回的 body 是 JSON 字符串，代码中需 `JSON.parse` 处理。
+
+### 飞书多维表格写入
+
+Coze 工作流处理完数据后，Server 端直接调用飞书 API 将结果写入多维表格，替代了原来 Coze 内置的飞书写入节点。
+
+**核心文件**：`src/utils/feishu.ts`
+
+**数据流**：
+```
+Coze 工作流 → normalize → flatten → to-feishu-records → 结束节点
+  返回 {output: [{fields: {...}}, ...], randomToken}
+       ↓
+coze-scheduler.ts executeTask() 接收
+       ↓
+feishu.ts batchCreateRecords(output) → 飞书 batch_create API
+       ↓
+统计写入数量 → 返回 total
+```
+
+**Token 策略**：
+- `tenant_access_token`（应用身份），有效期 2 小时
+- 内存缓存 + 并发锁，提前 10 分钟视为过期
+- 与 Coze token 管理同模式
+
+**权限要求**：
+- 飞书开放平台：应用需开通 `bitable:app` 权限
+- 文档级别：应用需通过「更多 → 添加文档应用」添加为多维表格协作者（可编辑）
+- 注意：普通「添加协作者」入口只能搜用户，不能添加应用
+
+**wiki 嵌套多维表格的 token 转换**：
+- wiki URL 中的 token 是 `wiki_token`，不是 bitable 的 `app_token`
+- 需通过 `GET /open-apis/wiki/v2/spaces/get_node?token={wiki_token}` 获取 `obj_token`
+- `obj_token` 才是 bitable API 所需的 `app_token`，配置到 `FEISHU_BITABLE_APP_TOKEN`
+
+**字段格式（飞书特殊要求）**：
+- 超链接：`{ link: "https://...", text: "显示文本" }`
+- 多选：`["选项1", "选项2"]`
+- 日期：毫秒时间戳 `1677206443000`
+- 评分/进度：`0~1` 的小数
+
+**批量写入限制**：单次最多 500 条，50 QPS（代码已自动分批）
 
 ## 重要约定
 
