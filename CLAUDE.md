@@ -322,10 +322,21 @@ Coze 工作流 → normalize → flatten → to-feishu-records → 结束节点
        ↓
 coze-scheduler.ts executeTask() 接收
        ↓
-feishu.ts batchCreateRecords(output) → 飞书 batch_create API
+feishu.ts batchCreateRecords(output)
        ↓
-统计写入数量 → 返回 total
+去重检查（按 platform 查近 7 天已有记录，比对 url.link）
+  ├─ 不重复 → batch_create 新增
+  └─ 重复   → batch_update 更新 updateTime 为 now
+       ↓
+统计新增/更新数量 → 返回 total
 ```
+
+**去重机制**：
+- 写入前按 `platform` 字段查询飞书已有记录（search API）
+- 仅对比最近 7 天内的数据（`DEDUP_WINDOW_DAYS=7`，客户端过滤 `updateTime`）
+- 以 `url.link` 为去重键：link 相同视为重复
+- 重复记录不重新写入，仅更新其 `updateTime` 为当前时间
+- 飞书 DateTime 字段不支持 `isGreater` 等过滤运算符，需拉取后客户端过滤
 
 **Token 策略**：
 - `tenant_access_token`（应用身份），有效期 2 小时
@@ -342,13 +353,16 @@ feishu.ts batchCreateRecords(output) → 飞书 batch_create API
 - 需通过 `GET /open-apis/wiki/v2/spaces/get_node?token={wiki_token}` 获取 `obj_token`
 - `obj_token` 才是 bitable API 所需的 `app_token`，配置到 `FEISHU_BITABLE_APP_TOKEN`
 
+**飞书 API 已知限制**：
+- `url`（超链接）字段：search API 的 `is`/`contains` 只匹配 `text` 显示文本，无法按 `link` 过滤
+- `DateTime` 字段：search API 不支持 `isGreater`/`isGreaterEqual` 等比较运算符，需客户端过滤
+- 批量操作：单次最多 500 条，50 QPS（代码已自动分批）
+
 **字段格式（飞书特殊要求）**：
 - 超链接：`{ link: "https://...", text: "显示文本" }`
 - 多选：`["选项1", "选项2"]`
 - 日期：毫秒时间戳 `1677206443000`
 - 评分/进度：`0~1` 的小数
-
-**批量写入限制**：单次最多 500 条，50 QPS（代码已自动分批）
 
 ## 重要约定
 
