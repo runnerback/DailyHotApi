@@ -29,6 +29,10 @@ export type Config = {
   COZE_PUBLIC_KEY_ID: string;
   COZE_SPACE_ID: string;
   COZE_WORKFLOW_ID: string;
+  FEISHU_APP_ID: string;
+  FEISHU_APP_SECRET: string;
+  FEISHU_BITABLE_APP_TOKEN: string;
+  FEISHU_BITABLE_TABLE_ID: string;
 };
 
 // 验证并提取环境变量
@@ -79,4 +83,8 @@ export const config: Config = {
   COZE_PUBLIC_KEY_ID: getEnvVariable("COZE_PUBLIC_KEY_ID") || "",
   COZE_SPACE_ID: getEnvVariable("COZE_SPACE_ID") || "",
   COZE_WORKFLOW_ID: getEnvVariable("COZE_WORKFLOW_ID") || "",
+  FEISHU_APP_ID: getEnvVariable("FEISHU_APP_ID") || "",
+  FEISHU_APP_SECRET: getEnvVariable("FEISHU_APP_SECRET") || "",
+  FEISHU_BITABLE_APP_TOKEN: getEnvVariable("FEISHU_BITABLE_APP_TOKEN") || "",
+  FEISHU_BITABLE_TABLE_ID: getEnvVariable("FEISHU_BITABLE_TABLE_ID") || "",
 };

@@ -4,6 +4,7 @@
 import crypto from "crypto";
 import { config } from "../config.js";
 import { runWorkflow } from "./coze.js";
+import { batchCreateRecords } from "./feishu.js";
 import { redis, ensureRedisConnection } from "./cache.js";
 import logger from "./logger.js";
 
@@ -215,19 +216,31 @@ export async function executeTask(taskOrInput: ScheduledTask | { platform: strin
       WORKFLOW_TIMEOUT_MS,
     );
 
-    // result.data 是 JSON 字符串
-    let parsed: { code: number; msg: string; log_id?: string; total?: number } = { code: result.code, msg: result.msg };
+    // result.data 是 JSON 字符串，Coze 结束节点返回 {output: [{fields: {...}}, ...], randomToken: "..."}
+    let parsed: { output?: Array<{ fields: Record<string, unknown> }>; randomToken?: string; code?: number; msg?: string; total?: number } = {};
     try {
       parsed = JSON.parse(result.data);
     } catch {
       // data 不是 JSON，使用 result 顶层字段
     }
 
+    // 将 Coze 输出写入飞书多维表格
+    let feishuTotal = 0;
+    if (parsed.output && Array.isArray(parsed.output) && parsed.output.length > 0) {
+      try {
+        feishuTotal = await batchCreateRecords(parsed.output);
+        logger.info(`📊 [SCHEDULER] 飞书写入统计: 成功 ${feishuTotal}/${parsed.output.length} 条`);
+      } catch (feishuErr) {
+        const feishuMsg = feishuErr instanceof Error ? feishuErr.message : String(feishuErr);
+        logger.error(`❌ [SCHEDULER] 飞书写入失败: ${feishuMsg}`);
+      }
+    }
+
     const taskResult = {
       code: parsed.code ?? result.code,
-      msg: parsed.msg ?? result.msg,
+      msg: parsed.msg ?? result.msg ?? `飞书写入 ${feishuTotal} 条`,
       randomToken,
-      total: parsed.total,
+      total: feishuTotal,
     };
 
     if (isStoredTask) {
