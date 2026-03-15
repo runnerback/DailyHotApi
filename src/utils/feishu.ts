@@ -35,7 +35,12 @@ async function fetchAccessToken(): Promise<{ access_token: string; expire: numbe
       proxy: false,
       timeout: 10000,
     },
-  );
+  ).catch((err) => {
+    if (axios.isAxiosError(err)) {
+      logger.error(`❌ [FEISHU] token 请求失败: status=${err.response?.status}, data=${JSON.stringify(err.response?.data)}, url=${err.config?.url}`);
+    }
+    throw err;
+  });
 
   if (response.data.code !== 0) {
     throw new Error(`飞书 token 获取失败(${response.data.code}): ${response.data.msg}`);
