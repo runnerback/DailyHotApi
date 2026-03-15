@@ -101,49 +101,55 @@ async function getExistingLinks(
   for (const platform of platforms) {
     let pageToken: string | undefined;
 
-    do {
-      const body: Record<string, unknown> = {
-        field_names: ["url", "updateTime"],
-        filter: {
-          conjunction: "and",
-          conditions: [
-            { field_name: "platform", operator: "is", value: [platform] },
-          ],
-        },
-        page_size: SEARCH_PAGE_SIZE,
-      };
-      if (pageToken) body.page_token = pageToken;
-
-      const response = await axios.post(
-        `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/search`,
-        body,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
+    try {
+      do {
+        const body: Record<string, unknown> = {
+          field_names: ["url", "updateTime"],
+          filter: {
+            conjunction: "and",
+            conditions: [
+              { field_name: "platform", operator: "is", value: [platform] },
+            ],
           },
-          proxy: false,
-          timeout: 15000,
-        },
-      );
+          page_size: SEARCH_PAGE_SIZE,
+        };
+        if (pageToken) body.page_token = pageToken;
 
-      if (response.data.code !== 0) {
-        logger.error(`❌ [FEISHU] 查询已有记录失败(${response.data.code}): ${response.data.msg}`);
-        break;
-      }
+        const response = await axios.post(
+          `${FEISHU_API_BASE}/bitable/v1/apps/${appToken}/tables/${tableId}/records/search`,
+          body,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            proxy: false,
+            timeout: 15000,
+          },
+        );
 
-      const items = response.data.data?.items ?? [];
-      for (const item of items) {
-        const link = item.fields?.url?.link;
-        const updateTime = item.fields?.updateTime;
-        // 客户端过滤：只保留最近 N 天内的记录
-        if (link && item.record_id && typeof updateTime === "number" && updateTime >= oneWeekAgoMs) {
-          linkMap.set(link, item.record_id);
+        if (response.data.code !== 0) {
+          logger.error(`❌ [FEISHU] 查询已有记录失败(${response.data.code}): ${response.data.msg}`);
+          break;
         }
-      }
 
-      pageToken = response.data.data?.has_more ? response.data.data.page_token : undefined;
-    } while (pageToken);
+        const items = response.data.data?.items ?? [];
+        for (const item of items) {
+          const link = item.fields?.url?.link;
+          const updateTime = item.fields?.updateTime;
+          // 客户端过滤：只保留最近 N 天内的记录
+          if (link && item.record_id && typeof updateTime === "number" && updateTime >= oneWeekAgoMs) {
+            linkMap.set(link, item.record_id);
+          }
+        }
+
+        pageToken = response.data.data?.has_more ? response.data.data.page_token : undefined;
+      } while (pageToken);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error(`❌ [FEISHU] 查询平台「${platform}」已有记录异常: ${msg}`);
+      // 查询失败不阻塞，该平台视为无已有记录（全部新增）
+    }
 
     const platformCount = [...linkMap.entries()].filter(([, rid]) => rid).length;
     logger.info(`🔍 [FEISHU] 平台「${platform}」近 ${DEDUP_WINDOW_DAYS} 天有 ${platformCount} 条记录（去重用）`);
